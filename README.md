@@ -54,3 +54,15 @@ If this happens, then the symlinks to the `lldb` module might be broken. Follow 
 cd src/
 python dyninspector.py
 ```
+
+## Tool Usage
+
+The tool can inspect ELF 32-bit LSB executables, Intel 80386.
+A sample C program can be found in the c_samples directory of the project. To build the program:
+
+```
+cd c_sample
+make
+```
+
+You can then open it from the DynInspector gui menu (Open ELF executable button).
