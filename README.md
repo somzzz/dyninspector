@@ -15,7 +15,7 @@ git clone https://github.com/somzzz/dyninspector
 
 ## Install Dependencies
 
-On a Linux distribution with `apt` you can run the `setup` script, found in the project root directory, to automatically install the dependencies:
+On a Debian distribution with `apt` you can run the `setup` script, found in the project root directory, to automatically install the dependencies:
 
 ```
 ./setup
