@@ -1,6 +1,8 @@
 # dyninspector
 Diploma Project
 
+Please send any feedback via [this form](https://docs.google.com/forms/d/1X-_MuDogIjQN7RHOGBHhO0nEZIXxs44G3oKWxrThaSo/edit?usp=drive_web).
+
 ## Project Requirements
 
 - 32bit Unix system
