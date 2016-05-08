@@ -1,0 +1,18 @@
+#!/bin/bash
+
+# Install PySide
+sudo apt-get install python-pyside -y
+
+# Install lldb 3-6 and its deps
+sudo apt-get install lldb-3.6 -y
+
+# Fix lldb broken links
+cd /usr/lib/llvm-3.6/lib/python2.7/site-packages/lldb
+sudo rm _lldb.so
+sudo ln -s ../../../liblldb.so.1 _lldb.so
+sudo rm libLLVM-3.6.0.so.1
+sudo ln -s ../../../libLLVM-3.6.0.so.1 libLLVM-3.6.0.so.1
+sudo rm libLLVM-3.6.so.1
+sudo ln -s ../../../libLLVM-3.6.0.so.1 libLLVM-3.6.so.1
+export PYTHONPATH='/usr/lib/llvm-3.6/lib/python2.7/site-packages'
+
