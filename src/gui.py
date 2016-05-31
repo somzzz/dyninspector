@@ -3,14 +3,15 @@ This module contains the graphical user interface for the
 dyninspector tool.
 """
 
+import os
+import sys
 import logging
 from PySide import QtCore, QtGui
 
 
 class MainWindow(QtGui.QWidget):
     """
-    GUI has only one windows with several widgets.
-    This is it!
+    Interface for viewing dynamic linking and lazy binding and dynamic loading
     """
 
     # String constants
@@ -39,15 +40,10 @@ class MainWindow(QtGui.QWidget):
         self.got_plt_table      = None
         self.sections_table     = None
         self.console_output     = None
-        self.elf_button         = None
+        self.openAction         = None
         self.func_selector      = None
-        self.restart_button     = None
-        self.continue_button    = None
-
-        # Layouts
-        self.layout     = QtGui.QVBoxLayout()
-        self.top_layout = QtGui.QHBoxLayout()
-        self.bot_layout = QtGui.QHBoxLayout()
+        self.startAction        = None
+        self.continueAction     = None
 
         # Data
         self.got_plt_table_data     = []
@@ -58,6 +54,29 @@ class MainWindow(QtGui.QWidget):
         self.sections_tablemodel    = None
         self.sections_tableheader   = None
 
+
+        # Layouts
+        self.layout     = QtGui.QVBoxLayout()
+        self.top_layout = QtGui.QHBoxLayout()
+        self.bot_layout = QtGui.QHBoxLayout()
+
+        # Toolbar
+        self.create_toolbar()
+        self.layout.addWidget(self.toolbar)
+
+        # Menu
+        self.menu = QtGui.QMenuBar(self)
+        m = QtGui.QMenu('App Mode', self.menu)
+        self.menu.addMenu(m)
+
+        dynlink_action = QtGui.QAction('Dynamic Linking / Lazy Binding Inspector', m, checkable=False)
+        dynlink_action.triggered.connect(self.show_dynlink_iface)
+        m.addAction(dynlink_action)
+
+        dynload_action = QtGui.QAction('Dynamic Loading Inspector', m, checkable=False)
+        dynload_action.triggered.connect(self.show_dynload_iface)
+        m.addAction(dynload_action)
+
         self.build_top_layout()
         self.build_bottom_layout()
 
@@ -67,6 +86,14 @@ class MainWindow(QtGui.QWidget):
         self.setLayout(self.layout)
 
         self.connect_signals()
+
+    def show_dynlink_iface(self):
+        self.set_continue_btn(False)
+        self.worker.set_app_mode_sig.emit(self.worker.AppMode.DYN_LINK)
+    
+    def show_dynload_iface(self):
+        self.set_continue_btn(False)
+        self.worker.set_app_mode_sig.emit(self.worker.AppMode.DYN_LOAD)
 
     def connect_signals(self):
         """
@@ -130,6 +157,46 @@ class MainWindow(QtGui.QWidget):
         del self.sections_table_data[:]
         self.sections_table.model().layoutChanged.emit()
 
+    def create_toolbar(self):
+        """
+        Build the app toolbar
+        """
+
+        # Open File button
+        self.toolbar = QtGui.QToolBar(self)
+        path = os.path.join(os.path.dirname(sys.modules[__name__].__file__), 'res/open.png')
+        self.openAction = QtGui.QAction(QtGui.QIcon(path), 'Open ELF executable', self)
+        self.toolbar.addAction(self.openAction)
+        self.openAction.triggered.connect(self.elf_button_clicked)
+
+        self.toolbar.addSeparator()
+        
+        # Start
+        path = os.path.join(os.path.dirname(sys.modules[__name__].__file__), 'res/start.png')
+        self.startAction = QtGui.QAction(QtGui.QIcon(path), 'Start program', self)
+        self.toolbar.addAction(self.startAction)
+        self.startAction.triggered.connect(self.restart_button_clicked)
+        self.startAction.setEnabled(False)
+
+        self.toolbar.addSeparator()
+
+        # Continue button
+        path = os.path.join(os.path.dirname(sys.modules[__name__].__file__), 'res/continue.png')
+        self.continueAction = QtGui.QAction(QtGui.QIcon(path), 'Continue', self)
+        self.toolbar.addAction(self.continueAction)
+        self.continueAction.triggered.connect(self.continue_button_clicked)
+        self.continueAction.setEnabled(False)
+
+        self.toolbar.addSeparator()
+
+        # Drop down widget
+        self.func_selector = QtGui.QComboBox(self.toolbar)
+        selectAction = self.toolbar.addWidget(self.func_selector)
+        self.func_selector.currentIndexChanged.connect(self.selection_change)
+        self.func_selector.setMinimumContentsLength(20)
+        self.func_selector.setToolTip("Select breakpoint function")
+
+
     def build_top_layout(self):
         """
         Build the upper part of the display.
@@ -149,7 +216,7 @@ class MainWindow(QtGui.QWidget):
         # .got.plt / .plt display
         self.got_plt_table = QtGui.QTableView()
 
-        self.tableheader = ['Function name', 'Location/Address', 'Value']
+        self.tableheader = ['Function name', 'Intermediate Stub Location Address', 'Function Address']
         self.tablemodel = GotPltTableModel(self.got_plt_table_data,
                                            self.tableheader, self)
         self.got_plt_table.setModel(self.tablemodel)
@@ -167,10 +234,6 @@ class MainWindow(QtGui.QWidget):
         self.got_plt_table.resizeColumnsToContents()
 
         self.top_layout.addWidget(self.got_plt_table)
-
-        # Control menu
-        control_layout = self.build_control_menu()
-        self.top_layout.addLayout(control_layout)
 
     def build_bottom_layout(self):
         """
@@ -211,50 +274,16 @@ class MainWindow(QtGui.QWidget):
         self.sections_table.resizeColumnsToContents()
         self.bot_layout.addWidget(self.sections_table)
 
-    def build_control_menu(self):
-        """
-        Create the control menu.
-        """
-
-        control_menu = QtGui.QVBoxLayout()
-
-        # Set executable button
-        self.elf_button = QtGui.QPushButton(self)
-        self.elf_button.setText(self.ELF_SELECT_BTN)
-        self.elf_button.clicked.connect(self.elf_button_clicked)
-
-        control_menu.addWidget(self.elf_button)
-
-        # Drop down widget
-        self.func_selector = QtGui.QComboBox()
-        self.func_selector.currentIndexChanged.connect(self.selection_change)
-
-        control_menu.addWidget(self.func_selector)
-
-        # Restart button
-        self.restart_button = QtGui.QPushButton(self)
-        self.restart_button.setText(self.START_BTN)
-        self.restart_button.clicked.connect(self.restart_button_clicked)
-
-        control_menu.addWidget(self.restart_button)
-
-        # Continue button
-        self.continue_button = QtGui.QPushButton(self)
-        self.continue_button.setText(self.CONTINUE_BTN)
-        self.continue_button.setEnabled(False)
-        self.continue_button.clicked.connect(self.continue_button_clicked)
-
-        control_menu.addWidget(self.continue_button)
-
-        return control_menu
-
     def elf_button_clicked(self):
         """
         OnClick method for the set_elf button.
         """
 
         self.elf = QtGui.QFileDialog.getOpenFileName()[0]
-        self.worker.set_elf_sig.emit(self.elf)
+
+        if self.elf is not None and len(self.elf) is not 0:
+            self.worker.set_elf_sig.emit(self.elf)
+            self.startAction.setEnabled(True)
 
     def restart_button_clicked(self):
         """
@@ -262,7 +291,7 @@ class MainWindow(QtGui.QWidget):
         """
 
         self.worker.run_target_sig.emit()
-        self.continue_button.setEnabled(True)
+        self.continueAction.setEnabled(True)
 
     def continue_button_clicked(self):
         """
@@ -276,7 +305,7 @@ class MainWindow(QtGui.QWidget):
         Enables or disables the continue button.
         """
 
-        self.continue_button.setEnabled(en)
+        self.continueAction.setEnabled(en)
 
     def selection_change(self, i):
         """

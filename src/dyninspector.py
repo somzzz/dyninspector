@@ -34,6 +34,7 @@ class DynInspector(QtCore.QObject):
     run_target_sig      = QtCore.Signal()
     continue_target_sig = QtCore.Signal()
     set_breakpoint_sig  = QtCore.Signal(str)
+    set_app_mode_sig    = QtCore.Signal(int)
 
     # To GUI
     clear_gui_sig               = QtCore.Signal()
@@ -68,7 +69,20 @@ class DynInspector(QtCore.QObject):
         def __init__(self):
             pass
 
-    state               = ExecStates.NONE
+    state = ExecStates.NONE
+
+    class AppMode(object):
+        """
+        App mode
+        """
+
+        DYN_LINK    =   0
+        DYN_LOAD    =   1
+
+        def __init__(self):
+            pass
+
+    mode = AppMode.DYN_LINK
 
     def __init__(self):
         QtCore.QObject.__init__(self)
@@ -87,6 +101,18 @@ class DynInspector(QtCore.QObject):
         self.run_target_sig.connect(self.run_target)
         self.continue_target_sig.connect(self.continue_target)
         self.set_breakpoint_sig.connect(self.set_breakpoint)
+        self.set_app_mode_sig.connect(self.set_app_mode)
+
+    def set_app_mode(self, mode):
+        self.mode = mode
+
+        self.logger.info("MODE IS " + str(mode))
+
+        # Restart App in new mode
+        self.clear_gui_sig.emit()
+
+        if self.elf is not None:
+            self.set_elf(self.elf)
 
     def set_elf(self, elf):
         """
@@ -122,7 +148,17 @@ class DynInspector(QtCore.QObject):
         if self.state != self.ExecStates.START_BP_SET:
             self.debugger.stop_target()
 
+        if self.mode == self.AppMode.DYN_LINK:
+            self.run_target_dynlink()
+        elif self.mode == self.AppMode.DYN_LOAD:
+            self.run_target_dynload()
+
+        self.state = self.ExecStates.ON_BP_SHOW_PREV_FRAME
+
+
+    def run_target_dynlink(self):
         process = self.debugger.run_target()
+        self.debugger.create_plt_breakpoints()
 
         # Console Output
         if process is None:
@@ -146,9 +182,40 @@ class DynInspector(QtCore.QObject):
         pc, code = self.debugger.print_frame(0)
         self.write_asm_display_sig.emit(code, pc)
 
-        self.state = self.ExecStates.ON_BP_SHOW_PREV_FRAME
+        
+    def run_target_dynload(self):
+        process = self.debugger.run_target()
+        self.debugger.create_dl_breakpoints()
+
+        # Display the current frame
+        pc, code = self.debugger.print_frame(0)
+        self.write_asm_display_sig.emit(code, pc)
 
     def continue_target(self):
+        if self.mode == self.AppMode.DYN_LINK:
+            self.continue_target_dynlink()
+        elif self.mode == self.AppMode.DYN_LOAD:
+            self.continue_target_dynload()
+
+    def continue_target_dynload(self):
+
+        if self.state == self.ExecStates.ON_BP_SHOW_PREV_FRAME:
+            code, _ = self.debugger.continue_target()
+
+            pc, code = self.debugger.print_frame(0)
+            self.write_asm_display_sig.emit(code, pc)
+
+            #self.state = self.ExecStates.ON_BP_SHOW_CURR_FRAME
+
+
+        elif self.state == self.ExecStates.ON_BP_SHOW_CURR_FRAME:
+            code, _ = self.debugger.step_instruction()
+
+            pc, code = self.debugger.print_frame(0)
+            self.write_asm_display_sig.emit(code, pc)
+
+
+    def continue_target_dynlink(self):
         """
         Continue running the target elf. Depending on the execution point
         we can either step to the next instruction (eg. when in the .plt)
@@ -171,7 +238,7 @@ class DynInspector(QtCore.QObject):
             if state == self.debugger.ProcessState.STOPPED:
                 self.state = self.ExecStates.ON_BP_SHOW_CURR_FRAME
                 pc = self.debugger.get_pc_from_frame(0)
-                self.debugger.set_breakpoint_on_return()
+                #self.debugger.set_breakpoint_on_return()
 
                 self.write_console_output_sig.emit(
                     "[%s] Process stopped on breakpoint. The current "
@@ -216,7 +283,7 @@ class DynInspector(QtCore.QObject):
 
                 self.write_console_output_sig.emit("[%s] It is the first "
                     "call to %s. Lazy binding takes place. Jump returns to "
-                    "the .PLT. The loader will be "
+                    "the .PLT. The dynamic linker will be "
                     "called." % (DEBUG, func_info.name))
             else:
                 self.state = self.ExecStates.CALL_FUNC
@@ -237,8 +304,16 @@ class DynInspector(QtCore.QObject):
             (pc, code) = self.debugger.print_frame(0)
             self.write_asm_display_sig.emit(code, pc)
 
-            self.write_console_output_sig.emit("[%s] Loader invoked."
-                                               % (DEBUG))
+            if self.step == 4:
+                self.write_console_output_sig.emit("[%s] Program jumps at "
+                    "the beginnig of the .plt section. Here there are "
+                    "a couple of instructions "
+                    "which invoke the dynamic linker." % (DEBUG))
+            if self.step == 1:        
+                self.write_console_output_sig.emit("[%s] Dynamic linker "
+                    "invoked. It will resolve the address of the function "
+                    "called and set the correct address in the .got.plt. "
+                    "It also calls the function."% (DEBUG))
 
             self.step -= 1
             if self.step == 0:

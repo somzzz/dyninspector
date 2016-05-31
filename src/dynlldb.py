@@ -15,7 +15,7 @@ class DynLldb(object):
     """
 
     MAIN    = "main"
-    logger  = logging.getLogger('dynload_lldb')
+    logger  = logging.getLogger('dynlldb')
 
     SECTIONS    = [".plt", ".text", ".got", ".got_plt", ".data"]
 
@@ -31,9 +31,30 @@ class DynLldb(object):
         def __init__(self):
             pass
 
+    class Breakpoint(object):
+        """
+        A breakpoint in the program.
+        """
+
+        PLT_BP              = 0
+        RET_FROM_PLT_BP     = 1
+        DLOPEN_BP           = 2
+        DLSYM_BP            = 3
+        DLCLOSE_BP          = 4
+        RET_FROM_DLOPEN     = 5
+        RET_FROM_DLCLOSE    = 6
+        RET_FROM_DLSYM      = 7
+
+        def __init__(self):
+            self.addr       = None
+            self.tag        = None
+            self.callback   = None
+            self.bp_object  = None
+
+
     class GotFuncInfo(object):
         """
-        An entry in the .got table: (addres, pointer value).
+        An entry in the .got table: (addres, pointer value)
         """
 
         def __init__(self):
@@ -43,16 +64,34 @@ class DynLldb(object):
 
     class PltFuncInfo(object):
         """
-        A stub in the .got.plt section.
+        A stub in the .got.plt section
         """
 
         def __init__(self):
 
+            self.name           = None
+            self.sym            = None
+            self.addr           = None
+            self.bp             = None
+            self.bp_callback    = None
+            self.got_entry      = None
+
+    class DynLibrary(object):
+        """
+        A Dynamically loaded library
+        """
+
+        def __init__(self):
+            self.symbols    = []
+
+    class DynSymbol(object):
+        """
+        A symbol from a dynamically loaded library
+        """
+
+        def __init__(self):
             self.name       = None
-            self.sym        = None
-            self.plt_addr   = None
-            self.bp         = None
-            self.got_entry  = None
+            self.address    = None
 
     def __init__(self):
 
@@ -120,6 +159,7 @@ class DynLldb(object):
         if self.target_elf is None:
             return
 
+
         stack_p = self.get_pc_from_frame(1)
         self.target_elf.BreakpointCreateByAddress(stack_p)
 
@@ -146,7 +186,7 @@ class DynLldb(object):
 
         # Create breakpoints for plt entries
         self.read_plt()
-        self.create_plt_breakpoints()
+        #self.create_plt_breakpoints()
 
         return self.process
 
@@ -182,7 +222,7 @@ class DynLldb(object):
     def continue_target(self):
         """
         Continue execution of the target if process was paused on a
-        breakpoint. We only have plt breakpoints.
+        breakpoint.
         Return a message with the state of the process after this call.
         """
 
@@ -195,10 +235,10 @@ class DynLldb(object):
             self.saved_pc = self.get_pc_from_frame(1)
             self.logger.info(self.process)
 
+            self.invoke_breakpoint_callback()
+
             # Update internal data structure for got entries
             self.read_got()
-
-            # Check if we stopped in a plt breakpoint and set breakpoint on SP
 
         return state, self.process.__str__()
 
@@ -215,11 +255,20 @@ class DynLldb(object):
         if state == lldb.eStateStopped:
             thread = self.process.GetThreadAtIndex(0)
             thread.StepInstruction(False)
+            frame0  = thread.GetFrameAtIndex(0)
 
             # Update internal data structure for got entries
             self.read_got()
 
         return state, self.process.__str__()
+
+    def invoke_breakpoint_callback(self):
+        self.logger.info("INVOKE BP CALLBACK")
+        # Call bp callback if any
+        current_pc = self.get_pc_from_frame(0)
+        for bp in self.bps:
+            if current_pc == bp.addr and bp.callback is not None:
+                bp.callback()
 
     def step_over(self):
         """
@@ -255,8 +304,100 @@ class DynLldb(object):
             bp.SetEnabled(False)
             entry.bp = bp
 
+            breakpoint = self.Breakpoint()
+            breakpoint.addr = entry.addr
+            breakpoint.tag = self.Breakpoint.PLT_BP
+            breakpoint.callback = self.on_plt_breakpoint
+            breakpoint.bp_object = bp
+
+            self.bps.append(breakpoint)
+
             # Log breakpoint set
             self.logger.info(bp)
+
+    def create_dl_breakpoints(self):
+        if self.target_elf is None:
+            return
+
+        if self.target_elf is None:
+            return
+
+        for key in self.plt:
+            entry = self.plt[key]
+
+            if key == "dlopen" or key == "dlclose" or key == "dlsym":
+                breakpoint = self.Breakpoint()
+                breakpoint.addr = entry.addr
+                breakpoint.bp_object = self.target_elf.BreakpointCreateByAddress(breakpoint.addr)
+
+                if key == "dlopen":
+                    breakpoint.tag = self.Breakpoint.DLOPEN_BP
+                    breakpoint.callback = self.on_dlopen_called
+                if key == "dlclose":
+                    breakpoint.tag = self.Breakpoint.DLCLOSE_BP
+                    breakpoint.callback = self.on_dlclose_called
+                if key == "dlsym":
+                    breakpoint.tag = self.Breakpoint.DLSYM_BP
+                    breakpoint.callback = self.on_dlsym_called
+
+                self.bps.append(breakpoint)
+
+    def on_dlopen_called(self):
+        self.logger.info("DLOPEN callback")
+
+        breakpoint = self.Breakpoint()
+        breakpoint.addr = self.get_pc_from_frame(1)
+        breakpoint.tag = self.Breakpoint.RET_FROM_DLOPEN
+        breakpoint.callback = self.on_return_from_dlopen
+        breakpoint.bp_object = self.target_elf.BreakpointCreateByAddress(breakpoint.addr)
+
+        self.bps.append(breakpoint)
+
+    def on_return_from_dlopen(self):
+        self.logger.info("RETURN FROM DLOPEN")
+
+    def on_dlclose_called(self):
+        self.logger.info("DLCLOSE callback")
+
+        breakpoint = self.Breakpoint()
+        breakpoint.addr = self.get_pc_from_frame(1)
+        breakpoint.tag = self.Breakpoint.RET_FROM_DLCLOSE
+        breakpoint.callback = self.on_return_from_dlclose
+        breakpoint.bp_object = self.target_elf.BreakpointCreateByAddress(breakpoint.addr)
+
+        self.bps.append(breakpoint)
+
+    def on_return_from_dlclose(self):
+        self.logger.info("RETURN FROM DLCLOSE")
+
+    def on_dlsym_called(self):
+        self.logger.info("DLSYM callback")
+
+        breakpoint = self.Breakpoint()
+        breakpoint.addr = self.get_pc_from_frame(1)
+        breakpoint.tag = self.Breakpoint.RET_FROM_DLSYM
+        breakpoint.callback = self.on_return_from_dlsym
+        breakpoint.bp_object = self.target_elf.BreakpointCreateByAddress(breakpoint.addr)
+
+        self.bps.append(breakpoint)
+
+    def on_return_from_dlsym(self):
+        self.logger.info("RETURNED FROM DLSYM")
+
+    def on_plt_breakpoint(self):
+        self.logger.info("PLT bp hit")
+
+        # Automatically create a breakpoint when returning from plt
+        breakpoint = self.Breakpoint()
+        breakpoint.addr = self.get_pc_from_frame(1)
+        breakpoint.tag = self.Breakpoint.RET_FROM_PLT_BP
+        breakpoint.callback = self.on_return_from_plt
+        breakpoint.bp_object = self.target_elf.BreakpointCreateByAddress(breakpoint.addr)
+
+        self.bps.append(breakpoint)
+
+    def on_return_from_plt(self):
+        self.logger.info("Return from PLT")
 
     def read_plt(self):
         """
@@ -457,6 +598,7 @@ class DynLldb(object):
         count       = 0
         pc_offset   = 0
         lines       = []
+        text        = ''
 
         state = self.process.GetState()
         if state == lldb.eStateStopped:
@@ -494,11 +636,18 @@ class DynLldb(object):
                     lines.append(line)
                     count += 1
 
-        text = ''
-        for i in range(count):
-            if i == pc_offset:
-                text += "-->\t%s\n" % lines[i]
-            else:
-                text += "\t%s\n" % lines[i]
+            for i in range(count):
+                if i == pc_offset:
+                    text += "-->\t%s\n" % lines[i]
+                else:
+                    text += "\t%s\n" % lines[i]
+
+            if text == '':
+                text = frame.Disassemble()
+
+                for item in text.split("\n"):
+                    if "->" in item:
+                        return pc_offset, text
+                    pc_offset += 1
 
         return pc_offset, text
