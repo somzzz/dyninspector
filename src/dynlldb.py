@@ -418,24 +418,15 @@ class DynLldb(object):
 
             for sec in module.section_iter():
                 if sec.GetName() == '.plt':
-                    addrs = lldb.SBAddress()
-                    addrs.SetAddress(sec, 16)
+                    for sym in module.symbol_in_section_iter(sec):
 
-                    addre = lldb.SBAddress()
-                    addre.SetAddress(sec, sec.size)
-
-                    i = 1
-                    addr = addrs
-                    while addr.__hex__() != addre.__hex__():
-                        sym = addr.GetSymbol()
-
-                        if sym.GetName().__str__().startswith('__') is False:
+                        if sym.GetName() is not None and sym.GetName().__str__().startswith('__') is False:
                             plt_func        = self.PltFuncInfo()
                             plt_func.name   = sym.GetName()
                             plt_func.sym    = sym
-                            plt_func.addr   = int(addr.__hex__(), 16)
+                            plt_func.addr   = sym.GetStartAddress().GetLoadAddress(self.target_elf)
 
-                            # Disasemble the first instruction and get the
+                            # Disassemble the first instruction and get the
                             # got address and value.
                             instrs = sym.GetInstructions(self.target_elf)
                             got_plt_jmp = instrs[0]
@@ -452,10 +443,6 @@ class DynLldb(object):
                             plt_func.got_entry.value = got_plt_value.__hex__()
 
                             self.plt[plt_func.name] = plt_func
-
-                        i += 1
-                        addr.SetAddress(sec, i * 16)
-
         # Log the plt entries
         self.logger.info(self.plt)
 
