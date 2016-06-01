@@ -39,11 +39,13 @@ class MainWindow(QtGui.QWidget):
         self.plt_display        = None
         self.got_plt_table      = None
         self.sections_table     = None
+        self.modules_table      = None
         self.console_output     = None
         self.openAction         = None
         self.func_selector      = None
         self.startAction        = None
         self.continueAction     = None
+        self.selectAction       = None
 
         # Data
         self.got_plt_table_data     = []
@@ -54,6 +56,9 @@ class MainWindow(QtGui.QWidget):
         self.sections_tablemodel    = None
         self.sections_tableheader   = None
 
+        self.modules_table_data     = []
+        self.modules_tablemodel    = None
+        self.modules_tableheader   = None
 
         # Layouts
         self.layout     = QtGui.QVBoxLayout()
@@ -84,16 +89,34 @@ class MainWindow(QtGui.QWidget):
         self.layout.addLayout(self.bot_layout)
 
         self.setLayout(self.layout)
+        self.show_dynlink_iface()
 
         self.connect_signals()
 
     def show_dynlink_iface(self):
         self.set_continue_btn(False)
+        self.create_dynlink_iface()
         self.worker.set_app_mode_sig.emit(self.worker.AppMode.DYN_LINK)
-    
+
+    def create_dynlink_iface(self):
+        self.modules_table.setVisible(False)
+
+        self.selectAction.setVisible(True)
+        self.sections_table.setVisible(True)
+        self.got_plt_table.setVisible(True)
+
     def show_dynload_iface(self):
         self.set_continue_btn(False)
+        self.create_dynload_iface()
         self.worker.set_app_mode_sig.emit(self.worker.AppMode.DYN_LOAD)
+
+    def create_dynload_iface(self):
+        self.got_plt_table.setVisible(False)
+        self.sections_table.setVisible(False)
+        self.selectAction.setVisible(False)
+
+        self.modules_table.setVisible(True)
+
 
     def connect_signals(self):
         """
@@ -107,6 +130,7 @@ class MainWindow(QtGui.QWidget):
         self.worker.set_cont_btn_sig.connect(self.set_continue_btn)
         self.worker.update_got_plt_table.connect(self.update_got_plt_table)
         self.worker.update_sections_table.connect(self.update_sections_table)
+        self.worker.update_modules_table.connect(self.update_modules_table)
 
     def run(self):
         """
@@ -140,6 +164,7 @@ class MainWindow(QtGui.QWidget):
         self.func_selector.clear()
         self.clear_got_table()
         self.clear_sections_table()
+        self.clear_modules_table()
 
     def clear_got_table(self):
         """
@@ -156,6 +181,14 @@ class MainWindow(QtGui.QWidget):
 
         del self.sections_table_data[:]
         self.sections_table.model().layoutChanged.emit()
+
+    def clear_modules_table(self):
+        """
+        Clear data from the modules widget
+        """
+
+        del self.modules_table_data[:]
+        self.modules_table.model().layoutChanged.emit()
 
     def create_toolbar(self):
         """
@@ -191,7 +224,7 @@ class MainWindow(QtGui.QWidget):
 
         # Drop down widget
         self.func_selector = QtGui.QComboBox(self.toolbar)
-        selectAction = self.toolbar.addWidget(self.func_selector)
+        self.selectAction = self.toolbar.addWidget(self.func_selector)
         self.func_selector.currentIndexChanged.connect(self.selection_change)
         self.func_selector.setMinimumContentsLength(20)
         self.func_selector.setToolTip("Select breakpoint function")
@@ -273,6 +306,31 @@ class MainWindow(QtGui.QWidget):
 
         self.sections_table.resizeColumnsToContents()
         self.bot_layout.addWidget(self.sections_table)
+
+        # module table
+        self.modules_table = QtGui.QTableView()
+
+        self.modules_tableheader = ['Type', 'First Address', 'Last Address', 'Size',
+                                     'Name']
+        self.modules_tablemodel = ElfModulesTableModel(
+            self.modules_table_data,
+            self.modules_tableheader,
+            self)
+        self.modules_table.setModel(self.modules_tablemodel)
+
+        self.modules_table.setShowGrid(True)
+        self.modules_table.resizeColumnsToContents()
+        self.modules_table.resizeRowsToContents()
+
+        vh = self.modules_table.verticalHeader()
+        vh.setVisible(False)
+
+        hh = self.modules_table.horizontalHeader()
+        hh.setStretchLastSection(False)
+
+        self.modules_table.resizeColumnsToContents()
+        self.bot_layout.addWidget(self.modules_table)
+
 
     def elf_button_clicked(self):
         """
@@ -404,6 +462,22 @@ class MainWindow(QtGui.QWidget):
         hh = self.sections_table.horizontalHeader()
         hh.setStretchLastSection(True)
 
+    def update_modules_table(self, entry, clear):
+        """
+        Append an entry to the modules table widget. Clear
+        table is clear param is True.
+        """
+
+        if clear is True:
+            self.clear_modules_table()
+
+        if entry != []:
+            self.modules_table_data.append(entry)
+            self.modules_table.model().layoutChanged.emit()
+
+        self.modules_table.resizeColumnsToContents()
+        hh = self.modules_table.horizontalHeader()
+        hh.setStretchLastSection(True)
 
 class GotPltTableModel(QtCore.QAbstractTableModel):
     """
@@ -473,6 +547,41 @@ class ElfSectionsTableModel(QtCore.QAbstractTableModel):
             else:
                 return None
 
+        return self.arraydata[index.row()][index.column()]
+
+    def setData(self, index, value, role):
+        pass
+
+    def headerData(self, col, orientation, role):
+        if orientation == QtCore.Qt.Horizontal and \
+                role == QtCore.Qt.DisplayRole:
+            return self.headerdata[col]
+        return None
+
+class ElfModulesTableModel(QtCore.QAbstractTableModel):
+    """
+    Python module for the table widget to dispay the modules loaded in the ELF.
+    """
+
+    def __init__(self, datain, headerdata, parent=None):
+
+        QtCore.QAbstractTableModel.__init__(self, parent)
+        self.arraydata = datain
+        self.headerdata = headerdata
+
+    def rowCount(self, parent):
+        return len(self.arraydata)
+
+    def columnCount(self, parent):
+        if len(self.arraydata) > 0:
+            return len(self.arraydata[0])
+        return 0
+
+    def data(self, index, role):
+        if not index.isValid():
+            return None
+        elif role != QtCore.Qt.DisplayRole:
+            return None
         return self.arraydata[index.row()][index.column()]
 
     def setData(self, index, value, role):

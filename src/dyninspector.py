@@ -44,6 +44,7 @@ class DynInspector(QtCore.QObject):
     set_cont_btn_sig            = QtCore.Signal(bool)
     update_got_plt_table        = QtCore.Signal(list, bool)
     update_sections_table       = QtCore.Signal(list, bool)
+    update_modules_table       = QtCore.Signal(list, bool)
 
     # Logging
     logger      = logging.getLogger('dynloader')
@@ -191,6 +192,10 @@ class DynInspector(QtCore.QObject):
         pc, code = self.debugger.print_frame(0)
         self.write_asm_display_sig.emit(code, pc)
 
+        # Modules table
+        data = self.debugger.get_modules()
+        self.update_modules_table_data(data)
+
     def continue_target(self):
         if self.mode == self.AppMode.DYN_LINK:
             self.continue_target_dynlink()
@@ -199,6 +204,7 @@ class DynInspector(QtCore.QObject):
 
     def continue_target_dynload(self):
 
+        self.debugger.get_modules()
         if self.state == self.ExecStates.ON_BP_SHOW_PREV_FRAME:
             code, _ = self.debugger.continue_target()
 
@@ -213,6 +219,10 @@ class DynInspector(QtCore.QObject):
 
             pc, code = self.debugger.print_frame(0)
             self.write_asm_display_sig.emit(code, pc)
+
+        # Modules table
+        data = self.debugger.get_modules()
+        self.update_modules_table_data(data)
 
 
     def continue_target_dynlink(self):
@@ -334,7 +344,7 @@ class DynInspector(QtCore.QObject):
         elif self.state == self.ExecStates.CALL_FUNC:
             self.logger.info("in call_func")
 
-            code, _ = self.debugger.step_over()
+            code, _ = self.debugger.continue_target()
 
             pc, code = self.debugger.print_frame(0)
             self.write_asm_display_sig.emit(code, pc)
@@ -404,6 +414,15 @@ class DynInspector(QtCore.QObject):
         for entry in new_data:
             self.update_sections_table.emit(entry, False)
 
+    def update_modules_table_data(self, new_data):
+        """
+        Update the gui with appropriate data about the program sections.
+        Basically shows the mapped libraries.
+        """
+
+        self.update_modules_table.emit([], True)
+        for entry in new_data:
+            self.update_modules_table.emit(entry, False)
 
 def main():
     """

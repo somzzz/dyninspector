@@ -7,7 +7,6 @@ import os
 import lldb
 import logging
 
-
 class DynLldb(object):
     """
     This is a wrapper class over LLDB. It offers support for dynamic
@@ -44,6 +43,8 @@ class DynLldb(object):
         RET_FROM_DLOPEN     = 5
         RET_FROM_DLCLOSE    = 6
         RET_FROM_DLSYM      = 7
+        DYN_CALL_FUNC_BP    = 8
+        RET_FROM_DYN_CALL   = 9
 
         def __init__(self):
             self.addr       = None
@@ -108,6 +109,7 @@ class DynLldb(object):
         self.plt            = {}
         self.got            = {}
         self.saved_pc       = None
+        self.static_modules = []
 
         # Breakpoints
         self.bps            = []
@@ -150,22 +152,6 @@ class DynLldb(object):
                 self.logger.info(breakpoint.__str__() + " enabled = "
                                  + str(breakpoint.IsEnabled()))
 
-    def set_breakpoint_on_return(self):
-        """
-        Set a breakpoint on return from the the current frame.
-        Useful for stopping after returning from the .plt.
-        """
-
-        if self.target_elf is None:
-            return
-
-
-        stack_p = self.get_pc_from_frame(1)
-        self.target_elf.BreakpointCreateByAddress(stack_p)
-
-        # Log breakpoint set
-        self.logger.info("Set bp on return from plt 0x%0.7X" % stack_p)
-
     def run_target(self):
         """
         Run the target. Create a process and read its plt data.
@@ -184,9 +170,11 @@ class DynLldb(object):
         if self.process is None:
             return None
 
-        # Create breakpoints for plt entries
+        # Read PLT data
         self.read_plt()
-        #self.create_plt_breakpoints()
+
+        # Get statically loaded modules
+        self.static_modules = self.read_modules()
 
         return self.process
 
@@ -211,6 +199,7 @@ class DynLldb(object):
         self.plt_entries    = []
         self.plt_symbols    = {}
         self.plt            = {}
+        self.static_modules = {}
 
         self.bps            = []
         self.bp_func_name   = None
@@ -264,30 +253,12 @@ class DynLldb(object):
 
     def invoke_breakpoint_callback(self):
         self.logger.info("INVOKE BP CALLBACK")
+
         # Call bp callback if any
         current_pc = self.get_pc_from_frame(0)
         for bp in self.bps:
             if current_pc == bp.addr and bp.callback is not None:
                 bp.callback()
-
-    def step_over(self):
-        """
-        Return to the previous frame.
-        """
-
-        if self.process is None:
-            return None, None
-
-        state = self.process.GetState()
-        if state == lldb.eStateStopped:
-            thread = self.process.GetThreadAtIndex(0)
-            frame0  = thread.GetFrameAtIndex(0)
-            thread.StepOutOfFrame(frame0)
-
-            # Update internal data structure for got entries
-            self.read_got()
-
-        return state, self.process.__str__()
 
     def create_plt_breakpoints(self):
         """
@@ -384,6 +355,52 @@ class DynLldb(object):
     def on_return_from_dlsym(self):
         self.logger.info("RETURNED FROM DLSYM")
 
+        # Read value from the return register
+        if self.process is None:
+            return
+
+        state = self.process.GetState()
+
+        if state == lldb.eStateStopped:
+            thread = self.process.GetThreadAtIndex(0)
+            frame = thread.GetFrameAtIndex(0)
+
+        GPRs = []
+        registers = frame.GetRegisters()
+        for regs in registers:
+            if 'general purpose registers' in regs.GetName().lower():
+                GPRs = regs
+                break
+
+        for reg in GPRs:
+            # Intel x86 => return value is in EAX
+            if 'eax' in reg.GetName().lower():
+                addr = reg.GetValue()
+
+                breakpoint = self.Breakpoint()
+                breakpoint.addr = int(addr, 16)
+                breakpoint.tag = self.Breakpoint.DYN_CALL_FUNC_BP
+                breakpoint.callback = self.on_dynamic_function_call
+                breakpoint.bp_object = self.target_elf.BreakpointCreateByAddress(breakpoint.addr)
+
+                self.bps.append(breakpoint)
+
+    def on_dynamic_function_call(self):
+        self.logger.info("CALL DYN FUNC")
+
+        # Automatically create a breakpoint when returning from call
+        breakpoint = self.Breakpoint()
+        breakpoint.addr = self.get_pc_from_frame(1)
+        breakpoint.tag = self.Breakpoint.RET_FROM_DYN_CALL
+        breakpoint.callback = self.on_return_from_dynamic_function_call
+        breakpoint.bp_object = self.target_elf.BreakpointCreateByAddress(breakpoint.addr)
+
+        self.bps.append(breakpoint)
+
+    def on_return_from_dynamic_function_call(self):
+        self.logger.info("RET FROM DYN FUNC CALL")
+
+
     def on_plt_breakpoint(self):
         self.logger.info("PLT bp hit")
 
@@ -419,7 +436,6 @@ class DynLldb(object):
             for sec in module.section_iter():
                 if sec.GetName() == '.plt':
                     for sym in module.symbol_in_section_iter(sec):
-
                         if sym.GetName() is not None and sym.GetName().__str__().startswith('__') is False:
                             plt_func        = self.PltFuncInfo()
                             plt_func.name   = sym.GetName()
@@ -443,6 +459,7 @@ class DynLldb(object):
                             plt_func.got_entry.value = got_plt_value.__hex__()
 
                             self.plt[plt_func.name] = plt_func
+
         # Log the plt entries
         self.logger.info(self.plt)
 
@@ -494,6 +511,61 @@ class DynLldb(object):
                 .GetLoadAddress(self.target_elf).__int__()
 
         return pc
+
+    def get_modules(self):
+        """
+        Get detailed info about the loaded_modules
+        """
+
+        final_data = []
+        new_modules = self.read_modules()
+
+        for m in new_modules:
+            if m in self.static_modules:
+                data = ["Statically loaded", m[0], m[1], m[2], m[3]]
+            else:
+                data = ["Dynamically loaded", m[0], m[1], m[2], m[3]]
+
+            final_data.append(data)
+
+        return final_data
+
+    def read_modules(self):
+        """
+        Return a list of all the modules (shared libraries & co)
+        loaded in the program address space.
+        """
+
+        if self.target_elf is None:
+            return
+
+        modules = []
+        for m in self.target_elf.module_iter():
+            start_addr = None
+            end_addr = None
+            mod_size = 0
+
+            for sec in m.section_iter():
+                load_addr = sec.GetLoadAddress(self.target_elf)
+
+                if hex(load_addr) == "0xffffffffffffffffL":
+                    continue;
+
+                # Module start address
+                if start_addr is None:
+                    start_addr = load_addr
+
+                # Keep updating the end address until the last
+                # section is found
+                size = sec.size
+                end_addr = load_addr + size
+                mod_size += size
+
+            if start_addr is not None:
+                module = [hex(start_addr), hex(end_addr), hex(mod_size), m.__str__()]
+                modules.append(module)
+
+        return modules
 
     def get_plt_function_names(self):
         """
