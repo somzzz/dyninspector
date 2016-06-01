@@ -229,7 +229,7 @@ class DynLldb(object):
             # Update internal data structure for got entries
             self.read_got()
 
-        return state, self.process.__str__()
+        return self.get_current_breakpoint()
 
     def step_instruction(self):
         """
@@ -250,6 +250,12 @@ class DynLldb(object):
             self.read_got()
 
         return state, self.process.__str__()
+
+    def get_current_breakpoint(self):
+        current_pc = self.get_pc_from_frame(0)
+        for bp in self.bps:
+            if current_pc == bp.addr:
+                return bp 
 
     def invoke_breakpoint_callback(self):
         self.logger.info("INVOKE BP CALLBACK")

@@ -44,7 +44,7 @@ class DynInspector(QtCore.QObject):
     set_cont_btn_sig            = QtCore.Signal(bool)
     update_got_plt_table        = QtCore.Signal(list, bool)
     update_sections_table       = QtCore.Signal(list, bool)
-    update_modules_table       = QtCore.Signal(list, bool)
+    update_modules_table        = QtCore.Signal(list, bool)
 
     # Logging
     logger      = logging.getLogger('dynloader')
@@ -205,20 +205,46 @@ class DynInspector(QtCore.QObject):
     def continue_target_dynload(self):
 
         self.debugger.get_modules()
-        if self.state == self.ExecStates.ON_BP_SHOW_PREV_FRAME:
-            code, _ = self.debugger.continue_target()
 
-            pc, code = self.debugger.print_frame(0)
+        if self.state == self.ExecStates.ON_BP_SHOW_PREV_FRAME:
+            breakpoint = self.debugger.continue_target()
+
+            # Check of program has ended
+            state = self.debugger.get_process_state()
+            if state == self.debugger.ProcessState.EXITED:
+                self.write_console_output_sig.emit("[%s] Execution finished. "
+                    "Process exited normally." % (DEBUG))
+                self.set_cont_btn_sig.emit(False)
+
+                return
+
+            if breakpoint.tag == self.debugger.Breakpoint.RET_FROM_DYN_CALL:
+                pc, code = self.debugger.print_frame(0)
+                self.write_asm_display_sig.emit(code, pc)
+                return
+
+            # Program stopped on breakpoint
+            pc, code = self.debugger.print_frame(1)
             self.write_asm_display_sig.emit(code, pc)
 
-            #self.state = self.ExecStates.ON_BP_SHOW_CURR_FRAME
+            self.logger.info("SHOW PREV FRAME")
+            if breakpoint.tag == self.debugger.Breakpoint.DLOPEN_BP or \
+                breakpoint.tag == self.debugger.Breakpoint.DLCLOSE_BP or \
+                    breakpoint.tag == self.debugger.Breakpoint.DLSYM_BP:
+                breakpoint = self.debugger.continue_target()
 
+            if breakpoint.tag == self.debugger.Breakpoint.DYN_CALL_FUNC_BP or \
+                breakpoint.tag == self.debugger.Breakpoint.RET_FROM_DLOPEN or \
+                   breakpoint.tag == self.debugger.Breakpoint.RET_FROM_DLSYM or \
+                    breakpoint.tag == self.debugger.Breakpoint.RET_FROM_DLCLOSE:
+                self.state = self.ExecStates.ON_BP_SHOW_CURR_FRAME
 
         elif self.state == self.ExecStates.ON_BP_SHOW_CURR_FRAME:
-            code, _ = self.debugger.step_instruction()
-
+            self.logger.info("SHOW CURR FRAME")
             pc, code = self.debugger.print_frame(0)
             self.write_asm_display_sig.emit(code, pc)
+
+            self.state = self.ExecStates.ON_BP_SHOW_PREV_FRAME
 
         # Modules table
         data = self.debugger.get_modules()
