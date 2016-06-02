@@ -230,27 +230,36 @@ class DynInspector(QtCore.QObject):
 
             self.logger.info("SHOW PREV FRAME")
             if breakpoint.tag == self.debugger.Breakpoint.DLOPEN_BP:
-                self.write_console_output_sig.emit("[%s] Dlopen called. The library is loaded in the program memory." % (DEBUG))
+                self.write_console_output_sig.emit("[%s] Dlopen called. "
+                    " The library is loaded in the program memory." % (DEBUG))
                 breakpoint = self.debugger.continue_target()
 
             if breakpoint.tag == self.debugger.Breakpoint.DLCLOSE_BP:
-                self.write_console_output_sig.emit("[%s] Dlclose called. The library is removed from the program memory." % (DEBUG))
+                self.write_console_output_sig.emit("[%s] Dlclose called. "
+                    "The library is removed from the program memory." % (DEBUG))
                 breakpoint = self.debugger.continue_target()
             
             if breakpoint.tag == self.debugger.Breakpoint.DLSYM_BP:
-                self.write_console_output_sig.emit("[%s] Dlsym called. The routine address is resolved and returned for further use." % (DEBUG))
                 breakpoint = self.debugger.continue_target()
 
             if breakpoint.tag == self.debugger.Breakpoint.DYN_CALL_FUNC_BP:
                 self.state = self.ExecStates.ON_BP_SHOW_CURR_FRAME
                 pc = self.debugger.get_pc_from_frame(0)
                 sym, mod = self.debugger.get_symbol_module(pc)
-                self.write_console_output_sig.emit("[%s] Symbol for function %s from library %s called." % (DEBUG, sym, mod))
+                self.write_console_output_sig.emit("[%s] Symbol for function "
+                    "%s from library %s called." % (DEBUG, sym, mod))
             
             if breakpoint.tag == self.debugger.Breakpoint.RET_FROM_DLOPEN or \
-                   breakpoint.tag == self.debugger.Breakpoint.RET_FROM_DLSYM or \
                     breakpoint.tag == self.debugger.Breakpoint.RET_FROM_DLCLOSE:
                 self.state = self.ExecStates.ON_BP_SHOW_CURR_FRAME
+
+            if breakpoint.tag == self.debugger.Breakpoint.RET_FROM_DLSYM:
+                self.state = self.ExecStates.ON_BP_SHOW_CURR_FRAME
+                addr = self.debugger.get_function_return_value()
+                sym, mod = self.debugger.get_symbol_module(int(addr, 16))
+                self.write_console_output_sig.emit("[%s] Dlsym called for " \
+                    "function %s from library %s. Dlsym found the function " \
+                    "at address %s." % (DEBUG, sym, mod, addr))
 
         elif self.state == self.ExecStates.ON_BP_SHOW_CURR_FRAME:
             self.logger.info("SHOW CURR FRAME")

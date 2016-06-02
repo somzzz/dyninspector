@@ -51,7 +51,7 @@ class DynLldb(object):
             self.tag        = None
             self.callback   = None
             self.bp_object  = None
-
+            self.details    = None
 
     class GotFuncInfo(object):
         """
@@ -330,8 +330,17 @@ class DynLldb(object):
 
         self.bps.append(breakpoint)
 
+
+        thread  = self.process.GetThreadAtIndex(0)
+        frame = thread.GetFrameAtIndex(0)
+        addr = frame.GetPCAddress()
+        load_addr = addr.GetLoadAddress(self.target_elf)
+        function = frame.GetFunction()
+        mod_name = frame.GetModule().GetFileSpec().GetFilename()
+
     def on_return_from_dlopen(self):
         self.logger.info("RETURN FROM DLOPEN")
+
 
     def on_dlclose_called(self):
         self.logger.info("DLCLOSE callback")
@@ -361,35 +370,16 @@ class DynLldb(object):
     def on_return_from_dlsym(self):
         self.logger.info("RETURNED FROM DLSYM")
 
-        # Read value from the return register
-        if self.process is None:
-            return
+        addr = self.get_function_return_value()
 
-        state = self.process.GetState()
+        breakpoint = self.Breakpoint()
+        breakpoint.addr = int(addr, 16)
+        breakpoint.tag = self.Breakpoint.DYN_CALL_FUNC_BP
+        breakpoint.callback = self.on_dynamic_function_call
+        breakpoint.bp_object = self.target_elf.BreakpointCreateByAddress(breakpoint.addr)
 
-        if state == lldb.eStateStopped:
-            thread = self.process.GetThreadAtIndex(0)
-            frame = thread.GetFrameAtIndex(0)
+        self.bps.append(breakpoint)
 
-        GPRs = []
-        registers = frame.GetRegisters()
-        for regs in registers:
-            if 'general purpose registers' in regs.GetName().lower():
-                GPRs = regs
-                break
-
-        for reg in GPRs:
-            # Intel x86 => return value is in EAX
-            if 'eax' in reg.GetName().lower():
-                addr = reg.GetValue()
-
-                breakpoint = self.Breakpoint()
-                breakpoint.addr = int(addr, 16)
-                breakpoint.tag = self.Breakpoint.DYN_CALL_FUNC_BP
-                breakpoint.callback = self.on_dynamic_function_call
-                breakpoint.bp_object = self.target_elf.BreakpointCreateByAddress(breakpoint.addr)
-
-                self.bps.append(breakpoint)
 
     def on_dynamic_function_call(self):
         self.logger.info("CALL DYN FUNC")
@@ -498,6 +488,36 @@ class DynLldb(object):
             return self.ProcessState.STOPPED
 
         return self.ProcessState.EXITED
+
+    def get_function_return_value(self):
+        """
+        Get function return value
+        """
+
+        # Read value from the return register
+        if self.process is None:
+            return
+
+        state = self.process.GetState()
+
+        if state == lldb.eStateStopped:
+            thread = self.process.GetThreadAtIndex(0)
+            frame = thread.GetFrameAtIndex(0)
+
+            GPRs = []
+            registers = frame.GetRegisters()
+            for regs in registers:
+                if 'general purpose registers' in regs.GetName().lower():
+                    GPRs = regs
+                    break
+
+            for reg in GPRs:
+                # Intel x86 => return value is in EAX
+                if 'eax' in reg.GetName().lower():
+                    addr = reg.GetValue()
+                    return addr
+
+        return None
 
     def get_pc_from_frame(self, frame):
         """
