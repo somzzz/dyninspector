@@ -573,6 +573,20 @@ class DynLldb(object):
 
         return modules
 
+    def get_symbol_module(self, address):
+        """
+        Gets the symbol located at the address indicated and its corresponding module.
+        """
+
+        sbaddr = lldb.SBAddress(address, self.target_elf)
+        if sbaddr is None:
+            return None, None
+
+        symbol = sbaddr.GetSymbol()
+        module = sbaddr.GetModule()
+
+        return symbol.GetName(), module.__str__()
+
     def get_plt_function_names(self):
         """
         Return a list of all the functions in the plt.

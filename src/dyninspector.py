@@ -146,18 +146,17 @@ class DynInspector(QtCore.QObject):
         self.clear_gui_sig.emit()
 
         # Stop a previous target if it had a process running
-        if self.state != self.ExecStates.START_BP_SET:
-            self.debugger.stop_target()
+        self.debugger.stop_target()
 
         if self.mode == self.AppMode.DYN_LINK:
             self.run_target_dynlink()
         elif self.mode == self.AppMode.DYN_LOAD:
             self.run_target_dynload()
 
-        self.state = self.ExecStates.ON_BP_SHOW_PREV_FRAME
-
 
     def run_target_dynlink(self):
+        self.state = self.ExecStates.ON_BP_SHOW_PREV_FRAME
+
         process = self.debugger.run_target()
         self.debugger.create_plt_breakpoints()
 
@@ -185,6 +184,8 @@ class DynInspector(QtCore.QObject):
 
         
     def run_target_dynload(self):
+        self.state = self.ExecStates.ON_BP_SHOW_PREV_FRAME
+
         process = self.debugger.run_target()
         self.debugger.create_dl_breakpoints()
 
@@ -209,6 +210,15 @@ class DynInspector(QtCore.QObject):
         if self.state == self.ExecStates.ON_BP_SHOW_PREV_FRAME:
             breakpoint = self.debugger.continue_target()
 
+            if breakpoint is not None and breakpoint.tag == self.debugger.Breakpoint.RET_FROM_DYN_CALL:
+                pc, code = self.debugger.print_frame(0)
+                self.write_asm_display_sig.emit(code, pc)
+                return
+
+            # Program stopped on breakpoint
+            pc, code = self.debugger.print_frame(1)
+            self.write_asm_display_sig.emit(code, pc)
+
             # Check of program has ended
             state = self.debugger.get_process_state()
             if state == self.debugger.ProcessState.EXITED:
@@ -218,23 +228,26 @@ class DynInspector(QtCore.QObject):
 
                 return
 
-            if breakpoint.tag == self.debugger.Breakpoint.RET_FROM_DYN_CALL:
-                pc, code = self.debugger.print_frame(0)
-                self.write_asm_display_sig.emit(code, pc)
-                return
-
-            # Program stopped on breakpoint
-            pc, code = self.debugger.print_frame(1)
-            self.write_asm_display_sig.emit(code, pc)
-
             self.logger.info("SHOW PREV FRAME")
-            if breakpoint.tag == self.debugger.Breakpoint.DLOPEN_BP or \
-                breakpoint.tag == self.debugger.Breakpoint.DLCLOSE_BP or \
-                    breakpoint.tag == self.debugger.Breakpoint.DLSYM_BP:
+            if breakpoint.tag == self.debugger.Breakpoint.DLOPEN_BP:
+                self.write_console_output_sig.emit("[%s] Dlopen called. The library is loaded in the program memory." % (DEBUG))
                 breakpoint = self.debugger.continue_target()
 
-            if breakpoint.tag == self.debugger.Breakpoint.DYN_CALL_FUNC_BP or \
-                breakpoint.tag == self.debugger.Breakpoint.RET_FROM_DLOPEN or \
+            if breakpoint.tag == self.debugger.Breakpoint.DLCLOSE_BP:
+                self.write_console_output_sig.emit("[%s] Dlclose called. The library is removed from the program memory." % (DEBUG))
+                breakpoint = self.debugger.continue_target()
+            
+            if breakpoint.tag == self.debugger.Breakpoint.DLSYM_BP:
+                self.write_console_output_sig.emit("[%s] Dlsym called. The routine address is resolved and returned for further use." % (DEBUG))
+                breakpoint = self.debugger.continue_target()
+
+            if breakpoint.tag == self.debugger.Breakpoint.DYN_CALL_FUNC_BP:
+                self.state = self.ExecStates.ON_BP_SHOW_CURR_FRAME
+                pc = self.debugger.get_pc_from_frame(0)
+                sym, mod = self.debugger.get_symbol_module(pc)
+                self.write_console_output_sig.emit("[%s] Symbol for function %s from library %s called." % (DEBUG, sym, mod))
+            
+            if breakpoint.tag == self.debugger.Breakpoint.RET_FROM_DLOPEN or \
                    breakpoint.tag == self.debugger.Breakpoint.RET_FROM_DLSYM or \
                     breakpoint.tag == self.debugger.Breakpoint.RET_FROM_DLCLOSE:
                 self.state = self.ExecStates.ON_BP_SHOW_CURR_FRAME
@@ -265,7 +278,7 @@ class DynInspector(QtCore.QObject):
         func_info = self.debugger.get_func_info(self.bp_func)
 
         if self.state == self.ExecStates.ON_BP_SHOW_PREV_FRAME:
-            code, _ = self.debugger.continue_target()
+            b = self.debugger.continue_target()
 
             pc, code = self.debugger.print_frame(1)
             self.write_asm_display_sig.emit(code, pc)
@@ -356,7 +369,7 @@ class DynInspector(QtCore.QObject):
                 self.state = self.ExecStates.RET
 
         elif self.state == self.ExecStates.RET:
-            code, _ = self.debugger.continue_target()
+            b = self.debugger.continue_target()
 
             pc, code = self.debugger.print_frame(0)
             self.write_asm_display_sig.emit(code, pc)
@@ -370,7 +383,7 @@ class DynInspector(QtCore.QObject):
         elif self.state == self.ExecStates.CALL_FUNC:
             self.logger.info("in call_func")
 
-            code, _ = self.debugger.continue_target()
+            b = self.debugger.continue_target()
 
             pc, code = self.debugger.print_frame(0)
             self.write_asm_display_sig.emit(code, pc)
