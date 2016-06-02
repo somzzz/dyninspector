@@ -330,16 +330,15 @@ class DynLldb(object):
 
         self.bps.append(breakpoint)
 
-
-        thread  = self.process.GetThreadAtIndex(0)
-        frame = thread.GetFrameAtIndex(0)
-        addr = frame.GetPCAddress()
-        load_addr = addr.GetLoadAddress(self.target_elf)
-        function = frame.GetFunction()
-        mod_name = frame.GetModule().GetFileSpec().GetFilename()
-
     def on_return_from_dlopen(self):
         self.logger.info("RETURN FROM DLOPEN")
+
+        addr = self.get_function_return_value()
+        print addr
+
+        got_plt_value = self.process.ReadPointerFromMemory(int(addr, 16),
+                                                       lldb.SBError())
+        print hex(got_plt_value)
 
 
     def on_dlclose_called(self):
@@ -579,7 +578,8 @@ class DynLldb(object):
 
                 # Module start address
                 if start_addr is None:
-                    start_addr = load_addr
+                    offset = sec.GetFileOffset()
+                    start_addr = load_addr - offset
 
                 # Keep updating the end address until the last
                 # section is found
