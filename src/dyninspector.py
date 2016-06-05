@@ -46,6 +46,8 @@ class DynInspector(QtCore.QObject):
     update_got_plt_table        = QtCore.Signal(list, bool)
     update_sections_table       = QtCore.Signal(list, bool)
     update_modules_table        = QtCore.Signal(list, bool)
+    elf_set_status_sig          = QtCore.Signal(bool)
+    has_compile_symbols_sig     = QtCore.Signal(bool)
 
     # Logging
     logger      = logging.getLogger('dynloader')
@@ -122,17 +124,27 @@ class DynInspector(QtCore.QObject):
         """
 
         self.logger.info('set elf ' + elf)
-        self.elf = elf
-        self.bp_func = None
         rc = self.debugger.set_elf(elf)
 
+        self.elf_set_status_sig.emit(rc)
+        
         # Console message
-        if rc is not None:
-            self.write_console_output_sig.emit(
-                ("[%s] Elf target set to %s" % (DEBUG, elf)))
-        else:
+        if rc is False:
             self.write_console_output_sig.emit(
                 "[%s] Could not set elf target." % DEBUG)
+
+            return None
+
+        self.elf = elf
+        self.bp_func = None
+        
+        self.write_console_output_sig.emit(
+            ("[%s] Elf target set to %s" % (DEBUG, elf)))
+        
+        # Debug symbols
+        debug_sym = self.debugger.is_compiled_with_debug_symbols()
+        print debug_sym
+        self.has_compile_symbols_sig.emit(debug_sym)
 
         self.state = self.ExecStates.START_BP_SET
 

@@ -48,17 +48,18 @@ class MainWindow(QtGui.QWidget):
         self.startAction        = None
         self.continueAction     = None
         self.selectAction       = None
+        self.debugAction        = None
 
         # Data
         self.got_plt_table_data     = []
         self.tablemodel             = None
         self.tableheader            = None
 
-        self.sections_table_data     = []
+        self.sections_table_data    = []
         self.sections_tablemodel    = None
         self.sections_tableheader   = None
 
-        self.modules_table_data     = []
+        self.modules_table_data    = []
         self.modules_tablemodel    = None
         self.modules_tableheader   = None
 
@@ -134,6 +135,8 @@ class MainWindow(QtGui.QWidget):
         self.worker.update_got_plt_table.connect(self.update_got_plt_table)
         self.worker.update_sections_table.connect(self.update_sections_table)
         self.worker.update_modules_table.connect(self.update_modules_table)
+        self.worker.elf_set_status_sig.connect(self.on_elf_set)
+        self.worker.has_compile_symbols_sig.connect(self.on_check_compile_symbols)
 
     def run(self):
         """
@@ -233,6 +236,16 @@ class MainWindow(QtGui.QWidget):
         self.func_selector.setMinimumContentsLength(20)
         self.func_selector.setToolTip("Select breakpoint function")
 
+        # Buttons to the right of the toolbar => spacer
+        spacer = QtGui.QWidget();
+        spacer.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding);
+        self.toolbar.addWidget(spacer)
+
+        # Debug Symbols status
+        path = os.path.join(os.path.dirname(sys.modules[__name__].__file__), 'res/cute_debug.png')
+        self.debugAction = QtGui.QAction(QtGui.QIcon(path), 'Debug Symbols Status', self)
+        self.toolbar.addAction(self.debugAction)
+        self.debugAction.setEnabled(True)
 
     def build_top_layout(self):
         """
@@ -349,6 +362,21 @@ class MainWindow(QtGui.QWidget):
         self.modules_table.resizeColumnsToContents()
         self.bot_layout.addWidget(self.modules_table)
 
+    def on_elf_set(self, status):
+        self.startAction.setEnabled(status)
+
+        if status is False:
+            msgBox = QtGui.QMessageBox()
+            msgBox.setWindowTitle("DynInspector")
+            msgBox.setText("The file selected could not be set as target. Check if it is a proper ELF executable.")
+            msgBox.exec_()
+
+    def on_check_compile_symbols(self, has_debug_symbols):
+        self.debugAction.setEnabled(has_debug_symbols)
+        if has_debug_symbols:
+            self.debugAction.setText("The program was compiled with debug symbols.")
+        else:
+            self.debugAction.setText("The program was NOT compiled with debug symbols.")
 
     def elf_button_clicked(self):
         """
@@ -359,7 +387,7 @@ class MainWindow(QtGui.QWidget):
 
         if self.elf is not None and len(self.elf) is not 0:
             self.worker.set_elf_sig.emit(self.elf)
-            self.startAction.setEnabled(True)
+            
 
     def restart_button_clicked(self):
         """

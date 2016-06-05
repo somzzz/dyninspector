@@ -150,9 +150,9 @@ class DynLldb(object):
             self.elf.__str__(), lldb.LLDB_ARCH_DEFAULT)
 
         if self.target:
-            return 0
+            return True
         else:
-            return None
+            return False
 
     def set_breakpoint(self, func, en):
         """
@@ -695,6 +695,43 @@ class DynLldb(object):
 
         return sections
 
+
+    def get_previous_instruction_address(self, frame, current_addr):
+        """
+        Return the address of the previous instruction from a frame.
+        If the current_addr is not found in the frame, the same address 
+        is returned.
+        """
+
+        prev_addr = current_addr
+        symbol  = frame.GetSymbol()
+        if symbol:
+            prev = current_addr
+
+            insts = symbol.GetInstructions(self.target)
+            for i in insts:
+                load_addr = i.GetAddress() \
+                        .GetLoadAddress(self.target).__int__()
+
+                if load_addr == current_addr:
+                        return prev_addr
+
+                prev_addr = load_addr
+
+        return prev_addr
+
+    def is_compiled_with_debug_symbols(self):
+        """
+        Check if the exec is compiled with debug symbols (-g).
+        """
+        if self.target:
+            module = self.target.FindModule(self.target.GetExecutable())
+            for cu in module.get_compile_units_array():
+                for lineEntry in cu:
+                    return True
+
+        return False
+
     # Printing
 
     def print_frame(self, idx):
@@ -790,7 +827,7 @@ class DynLldb(object):
 
             if not function:
                 code = 'The original code can\'t be displayed. ' \
-                    'Either the program was not compiled with debugging' \
+                    'Either the program was not compiled with debugging ' \
                     'symbols or the current frame does not have a corresponding ' \
                     'function in the source code. Please check the assembly ' \
                     'code for more details.'
@@ -802,32 +839,12 @@ class DynLldb(object):
                 line_num = addr.GetLineEntry().GetLine()
                 line_num = line_num - 1
 
-                file = open(dir_name + '/' + file_name, 'r')
+                try:
+                    file = open(dir_name + '/' + file_name, 'r')
+                except (OSError, IOError) as e:
+                    return line, "Could not find source file."
+
                 code = file.read()
                 line = line_num
 
         return line, code
-
-    def get_previous_instruction_address(self, frame, current_addr):
-        """
-        Return the address of the previous instruction from a frame.
-        If the current_addr is not found in the frame, the same address 
-        is returned.
-        """
-
-        prev_addr = current_addr
-        symbol  = frame.GetSymbol()
-        if symbol:
-            prev = current_addr
-
-            insts = symbol.GetInstructions(self.target)
-            for i in insts:
-                load_addr = i.GetAddress() \
-                        .GetLoadAddress(self.target).__int__()
-
-                if load_addr == current_addr:
-                        return prev_addr
-
-                prev_addr = load_addr
-
-        return prev_addr
