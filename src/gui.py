@@ -50,6 +50,7 @@ class MainWindow(QtGui.QWidget):
         self.selectAction       = None
         self.debugAction        = None
         self.modeAction         = None
+        self.helpAction         = None
 
         # Data
         self.got_plt_table_data     = []
@@ -259,6 +260,13 @@ class MainWindow(QtGui.QWidget):
         self.toolbar.addAction(self.debugAction)
         self.debugAction.setEnabled(True)
 
+        # Help button
+        path = os.path.join(os.path.dirname(sys.modules[__name__].__file__), 'res/help.png')
+        self.helpAction = QtGui.QAction(QtGui.QIcon(path), 'Info', self)
+        self.toolbar.addAction(self.helpAction)
+        self.helpAction.triggered.connect(self.help_button_clicked)
+        self.helpAction.setEnabled(True)
+
     def build_top_layout(self):
         """
         Build the upper part of the display.
@@ -416,6 +424,13 @@ class MainWindow(QtGui.QWidget):
 
         self.worker.continue_target_sig.emit()
 
+    def help_button_clicked(self):
+        """
+        On help button clicked display some info depending on the mode"
+        """
+        help_window = TabDialog(self)
+        help_window.show()
+
     def set_continue_btn(self, en):
         """
         Enables or disables the continue button.
@@ -545,6 +560,55 @@ class MainWindow(QtGui.QWidget):
         self.modules_table.resizeColumnsToContents()
         hh = self.modules_table.horizontalHeader()
         hh.setStretchLastSection(True)
+
+class TabDialog(QtGui.QDialog):
+
+    def __init__(self, parent):
+        super(TabDialog, self).__init__(parent)
+        self.setWindowTitle("DynInspector - Info")
+        self.setMinimumSize(600, 400)
+        self.initUI()
+
+    def initUI(self):
+        layout = QtGui.QVBoxLayout()
+        self.setLayout(layout)
+
+        help_tabs = QtGui.QTabWidget()
+
+        # Dynamic linking info tab
+        dynlink_tab = QtGui.QWidget()
+        dynlink_layout = QtGui.QVBoxLayout()
+        dynlink_tab.setLayout(dynlink_layout)
+
+        dynlink_text = QtGui.QTextEdit(dynlink_tab)
+        dynlink_text.setText("Some info about dynamic linking.")
+        dynlink_layout.addWidget(dynlink_text)
+
+        help_tabs.addTab(dynlink_tab, "Dynamic Linking")
+
+        # Dynamic loading info tab
+        dynload_tab = QtGui.QWidget()
+        dynload_layout = QtGui.QVBoxLayout()
+        dynload_tab.setLayout(dynload_layout)
+
+        dynload_text = QtGui.QTextEdit(dynload_tab)
+        dynload_text.setText("Some info about dynamic loading.")
+        dynload_layout.addWidget(dynload_text)
+
+        help_tabs.addTab(dynload_tab, "Dynamic Loading")
+
+        # Lazy binding info tab
+        lazy_bind_tab = QtGui.QWidget()
+        lazy_bind_layout = QtGui.QVBoxLayout()
+        lazy_bind_tab.setLayout(lazy_bind_layout)
+
+        lazy_bind_text = QtGui.QTextEdit(lazy_bind_tab)
+        lazy_bind_text.setText("Some info about lazy binding.")
+        lazy_bind_layout.addWidget(lazy_bind_text)
+
+        help_tabs.addTab(lazy_bind_tab, "Lazy binding")
+
+        layout.addWidget(help_tabs)
 
 class GotPltTableModel(QtCore.QAbstractTableModel):
     """
