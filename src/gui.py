@@ -49,6 +49,7 @@ class MainWindow(QtGui.QWidget):
         self.continueAction     = None
         self.selectAction       = None
         self.debugAction        = None
+        self.modeAction         = None
 
         # Data
         self.got_plt_table_data     = []
@@ -108,10 +109,14 @@ class MainWindow(QtGui.QWidget):
         self.sections_table.setVisible(True)
         self.got_plt_table.setVisible(True)
 
+        self.modeAction.setText("Dynamic Linking / Lazy Binding Inspector")
+
     def show_dynload_iface(self):
         self.set_continue_btn(False)
         self.create_dynload_iface()
         self.worker.set_app_mode_sig.emit(self.worker.AppMode.DYN_LOAD)
+
+        self.modeAction.setText("Dynamic Loading Inspector")
 
     def create_dynload_iface(self):
         self.got_plt_table.setVisible(False)
@@ -240,6 +245,13 @@ class MainWindow(QtGui.QWidget):
         spacer = QtGui.QWidget();
         spacer.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding);
         self.toolbar.addWidget(spacer)
+
+        # Program mode
+        self.modeAction = QtGui.QPushButton(self.toolbar)
+        self.modeAction.setText("Application Mode")
+        self.modeAction.setFlat(True)
+        self.toolbar.addWidget(self.modeAction)
+        self.modeAction.setEnabled(False)
 
         # Debug Symbols status
         path = os.path.join(os.path.dirname(sys.modules[__name__].__file__), 'res/cute_debug.png')
