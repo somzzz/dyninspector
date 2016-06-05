@@ -102,7 +102,25 @@ class DynLldb(object):
 
         # Target info
         self.elf            = None
-        self.target_elf     = None
+        self.target     = None
+        self.process        = None
+        self.plt_entries    = []
+        self.plt_symbols    = {}
+        self.plt            = {}
+        self.got            = {}
+        self.saved_pc       = None
+        self.static_modules = []
+
+        # Breakpoints
+        self.bps            = []
+        self.bp_func_name   = None
+        self.bp_func        = None
+        self.bp_main        = None
+
+    def clean(self):
+        # Target info
+        self.elf            = None
+        self.target     = None
         self.process        = None
         self.plt_entries    = []
         self.plt_symbols    = {}
@@ -122,15 +140,16 @@ class DynLldb(object):
             elf : elf executable path
         """
 
+        self.clean()
         self.elf = elf
 
-        if self.target_elf is not None:
-            self.target_elf.Clear()
+        if self.target is not None:
+            self.target.Clear()
 
-        self.target_elf = self.debugger.CreateTargetWithFileAndArch(
+        self.target = self.debugger.CreateTargetWithFileAndArch(
             self.elf.__str__(), lldb.LLDB_ARCH_DEFAULT)
 
-        if self.target_elf:
+        if self.target:
             return 0
         else:
             return None
@@ -143,12 +162,12 @@ class DynLldb(object):
 
         self.bp_func_name = func
 
-        if self.target_elf:
+        if self.target:
             entry = self.plt[func]
             if entry is not None:
                 entry.bp.SetEnabled(en)
 
-            for breakpoint in self.target_elf.breakpoint_iter():
+            for breakpoint in self.target.breakpoint_iter():
                 self.logger.info(breakpoint.__str__() + " enabled = "
                                  + str(breakpoint.IsEnabled()))
 
@@ -157,16 +176,16 @@ class DynLldb(object):
         Run the target. Create a process and read its plt data.
         """
 
-        if self.target_elf is None:
+        if self.target is None:
             return
 
         # Set the main bp before start
-        self.bp_main = self.target_elf.BreakpointCreateByName(
+        self.bp_main = self.target.BreakpointCreateByName(
             'main',
-            self.target_elf.GetExecutable().GetFilename())
+            self.target.GetExecutable().GetFilename())
 
         # Run target
-        self.process = self.target_elf.LaunchSimple(None, None, os.getcwd())
+        self.process = self.target.LaunchSimple(None, None, os.getcwd())
         if self.process is None:
             return None
 
@@ -184,7 +203,7 @@ class DynLldb(object):
         Clear all internal data related to the session.
         """
 
-        if self.target_elf is None:
+        if self.target is None:
             return
 
         self.logger.info("stop_target")
@@ -192,7 +211,7 @@ class DynLldb(object):
         if self.process:
             self.process.Stop()
 
-        self.target_elf.DeleteAllBreakpoints()
+        self.target.DeleteAllBreakpoints()
 
         # Reset internal data
         self.process        = None
@@ -219,8 +238,10 @@ class DynLldb(object):
             return None, None
 
         state = self.process.GetState()
+
         if state == lldb.eStateStopped:
-            self.process.Continue()
+            err = self.process.Continue()
+
             self.saved_pc = self.get_pc_from_frame(1)
             self.logger.info(self.process)
 
@@ -272,12 +293,12 @@ class DynLldb(object):
         Breakpoints are disabled
         """
 
-        if self.target_elf is None:
+        if self.target is None:
             return
 
         for key in self.plt:
             entry = self.plt[key]
-            bp = self.target_elf.BreakpointCreateByAddress(entry.addr)
+            bp = self.target.BreakpointCreateByAddress(entry.addr)
             bp.SetEnabled(False)
             entry.bp = bp
 
@@ -293,10 +314,10 @@ class DynLldb(object):
             self.logger.info(bp)
 
     def create_dl_breakpoints(self):
-        if self.target_elf is None:
+        if self.target is None:
             return
 
-        if self.target_elf is None:
+        if self.target is None:
             return
 
         for key in self.plt:
@@ -305,7 +326,7 @@ class DynLldb(object):
             if key == "dlopen" or key == "dlclose" or key == "dlsym":
                 breakpoint = self.Breakpoint()
                 breakpoint.addr = entry.addr
-                breakpoint.bp_object = self.target_elf.BreakpointCreateByAddress(breakpoint.addr)
+                breakpoint.bp_object = self.target.BreakpointCreateByAddress(breakpoint.addr)
 
                 if key == "dlopen":
                     breakpoint.tag = self.Breakpoint.DLOPEN_BP
@@ -326,20 +347,12 @@ class DynLldb(object):
         breakpoint.addr = self.get_pc_from_frame(1)
         breakpoint.tag = self.Breakpoint.RET_FROM_DLOPEN
         breakpoint.callback = self.on_return_from_dlopen
-        breakpoint.bp_object = self.target_elf.BreakpointCreateByAddress(breakpoint.addr)
+        breakpoint.bp_object = self.target.BreakpointCreateByAddress(breakpoint.addr)
 
         self.bps.append(breakpoint)
 
     def on_return_from_dlopen(self):
         self.logger.info("RETURN FROM DLOPEN")
-
-        addr = self.get_function_return_value()
-        print addr
-
-        got_plt_value = self.process.ReadPointerFromMemory(int(addr, 16),
-                                                       lldb.SBError())
-        print hex(got_plt_value)
-
 
     def on_dlclose_called(self):
         self.logger.info("DLCLOSE callback")
@@ -348,7 +361,7 @@ class DynLldb(object):
         breakpoint.addr = self.get_pc_from_frame(1)
         breakpoint.tag = self.Breakpoint.RET_FROM_DLCLOSE
         breakpoint.callback = self.on_return_from_dlclose
-        breakpoint.bp_object = self.target_elf.BreakpointCreateByAddress(breakpoint.addr)
+        breakpoint.bp_object = self.target.BreakpointCreateByAddress(breakpoint.addr)
 
         self.bps.append(breakpoint)
 
@@ -362,7 +375,7 @@ class DynLldb(object):
         breakpoint.addr = self.get_pc_from_frame(1)
         breakpoint.tag = self.Breakpoint.RET_FROM_DLSYM
         breakpoint.callback = self.on_return_from_dlsym
-        breakpoint.bp_object = self.target_elf.BreakpointCreateByAddress(breakpoint.addr)
+        breakpoint.bp_object = self.target.BreakpointCreateByAddress(breakpoint.addr)
 
         self.bps.append(breakpoint)
 
@@ -375,7 +388,7 @@ class DynLldb(object):
         breakpoint.addr = int(addr, 16)
         breakpoint.tag = self.Breakpoint.DYN_CALL_FUNC_BP
         breakpoint.callback = self.on_dynamic_function_call
-        breakpoint.bp_object = self.target_elf.BreakpointCreateByAddress(breakpoint.addr)
+        breakpoint.bp_object = self.target.BreakpointCreateByAddress(breakpoint.addr)
 
         self.bps.append(breakpoint)
 
@@ -388,7 +401,7 @@ class DynLldb(object):
         breakpoint.addr = self.get_pc_from_frame(1)
         breakpoint.tag = self.Breakpoint.RET_FROM_DYN_CALL
         breakpoint.callback = self.on_return_from_dynamic_function_call
-        breakpoint.bp_object = self.target_elf.BreakpointCreateByAddress(breakpoint.addr)
+        breakpoint.bp_object = self.target.BreakpointCreateByAddress(breakpoint.addr)
 
         self.bps.append(breakpoint)
 
@@ -404,7 +417,7 @@ class DynLldb(object):
         breakpoint.addr = self.get_pc_from_frame(1)
         breakpoint.tag = self.Breakpoint.RET_FROM_PLT_BP
         breakpoint.callback = self.on_return_from_plt
-        breakpoint.bp_object = self.target_elf.BreakpointCreateByAddress(breakpoint.addr)
+        breakpoint.bp_object = self.target.BreakpointCreateByAddress(breakpoint.addr)
 
         self.bps.append(breakpoint)
 
@@ -421,6 +434,7 @@ class DynLldb(object):
             return
 
         state = self.process.GetState()
+        print state
 
         if state == lldb.eStateStopped:
             thread  = self.process.GetThreadAtIndex(0)
@@ -435,14 +449,14 @@ class DynLldb(object):
                             plt_func        = self.PltFuncInfo()
                             plt_func.name   = sym.GetName()
                             plt_func.sym    = sym
-                            plt_func.addr   = sym.GetStartAddress().GetLoadAddress(self.target_elf)
+                            plt_func.addr   = sym.GetStartAddress().GetLoadAddress(self.target)
 
                             # Disassemble the first instruction and get the
                             # got address and value.
-                            instrs = sym.GetInstructions(self.target_elf)
+                            instrs = sym.GetInstructions(self.target)
                             got_plt_jmp = instrs[0]
                             got_plt_addr = got_plt_jmp \
-                                .GetOperands(self.target_elf)
+                                .GetOperands(self.target)
 
                             addr_val = int(got_plt_addr[1:], 16)
                             got_plt_value = self.process \
@@ -533,7 +547,7 @@ class DynLldb(object):
             thread  = self.process.GetThreadAtIndex(0)
             frame   = thread.GetFrameAtIndex(frame)
             pc      = frame.GetPCAddress() \
-                .GetLoadAddress(self.target_elf).__int__()
+                .GetLoadAddress(self.target).__int__()
 
         return pc
 
@@ -561,17 +575,17 @@ class DynLldb(object):
         loaded in the program address space.
         """
 
-        if self.target_elf is None:
+        if self.target is None:
             return
 
         modules = []
-        for m in self.target_elf.module_iter():
+        for m in self.target.module_iter():
             start_addr = None
             end_addr = None
             mod_size = 0
 
             for sec in m.section_iter():
-                load_addr = sec.GetLoadAddress(self.target_elf)
+                load_addr = sec.GetLoadAddress(self.target)
 
                 if hex(load_addr) == "0xffffffffffffffffL":
                     continue;
@@ -598,7 +612,7 @@ class DynLldb(object):
         Gets the symbol located at the address indicated and its corresponding module.
         """
 
-        sbaddr = lldb.SBAddress(address, self.target_elf)
+        sbaddr = lldb.SBAddress(address, self.target)
         if sbaddr is None:
             return None, None
 
@@ -663,12 +677,12 @@ class DynLldb(object):
             thread  = self.process.GetThreadAtIndex(0)
             frame0  = thread.GetFrameAtIndex(0)
             pc      = frame0.GetPCAddress() \
-                .GetLoadAddress(self.target_elf).__int__()
+                .GetLoadAddress(self.target).__int__()
 
-        for mod in self.target_elf.module_iter():
+        for mod in self.target.module_iter():
             for sec in mod.section_iter():
                 if sec.GetName() in self.SECTIONS:
-                    load_addr = sec.GetLoadAddress(self.target_elf)
+                    load_addr = sec.GetLoadAddress(self.target)
                     size = sec.size
                     mod_name = mod.__str__()
                     if pc >= load_addr and pc <= load_addr + size:
@@ -704,21 +718,21 @@ class DynLldb(object):
             thread  = self.process.GetThreadAtIndex(0)
             frame   = thread.GetFrameAtIndex(idx)
             symbol  = frame.GetSymbol()
-            pc      = frame.GetPCAddress().GetLoadAddress(self.target_elf)
+            pc      = frame.GetPCAddress().GetLoadAddress(self.target)
 
             if symbol:
                 offset = 0
 
-                insts = symbol.GetInstructions(self.target_elf)
+                insts = symbol.GetInstructions(self.target)
                 for i in insts:
                     load_addr   = i.GetAddress() \
-                        .GetLoadAddress(self.target_elf).__int__()
+                        .GetLoadAddress(self.target).__int__()
                     offset      = i.GetAddress().__int__() \
                         - symbol.GetStartAddress().__int__()
                     sym_offset  = "%s + %u" % (symbol.GetName(), offset)
-                    mnemonic    = i.GetMnemonic(self.target_elf)
-                    operands    = i.GetOperands(self.target_elf)
-                    comment     = i.GetComment(self.target_elf)
+                    mnemonic    = i.GetMnemonic(self.target)
+                    operands    = i.GetOperands(self.target)
+                    comment     = i.GetComment(self.target)
 
                     line = ''
                     if comment:
@@ -750,3 +764,70 @@ class DynLldb(object):
                     pc_offset += 1
 
         return pc_offset, text
+
+    def print_function(self, idx):
+        """
+        If debug information is available for the function at the current
+        program counter from frame idx, print the function. Otherwise write a message.
+        """
+
+        if self.process is None:
+            return None, None
+
+        code = ''
+        line = -1
+
+        state = self.process.GetState()
+        if state == lldb.eStateStopped:
+            thread  = self.process.GetThreadAtIndex(0)
+            frame = thread.GetFrameAtIndex(idx)
+            pc_addr = self.get_previous_instruction_address(frame,
+                frame.GetPCAddress().GetLoadAddress(self.target))
+            addr = lldb.SBAddress()
+            addr.SetLoadAddress(pc_addr, self.target)
+            function = frame.GetFunction()
+            mod_name = frame.GetModule().GetFileSpec().GetFilename()
+
+            if not function:
+                code = 'The original code can\'t be displayed. ' \
+                    'Either the program was not compiled with debugging' \
+                    'symbols or the current frame does not have a corresponding ' \
+                    'function in the source code. Please check the assembly ' \
+                    'code for more details.'
+            else:
+                # Debug info is available for 'function'.
+                func_name = frame.GetFunctionName()
+                dir_name = frame.GetLineEntry().GetFileSpec().GetDirectory()
+                file_name = frame.GetLineEntry().GetFileSpec().GetFilename()
+                line_num = addr.GetLineEntry().GetLine()
+                line_num = line_num - 1
+
+                file = open(dir_name + '/' + file_name, 'r')
+                code = file.read()
+                line = line_num
+
+        return line, code
+
+    def get_previous_instruction_address(self, frame, current_addr):
+        """
+        Return the address of the previous instruction from a frame.
+        If the current_addr is not found in the frame, the same address 
+        is returned.
+        """
+
+        prev_addr = current_addr
+        symbol  = frame.GetSymbol()
+        if symbol:
+            prev = current_addr
+
+            insts = symbol.GetInstructions(self.target)
+            for i in insts:
+                load_addr = i.GetAddress() \
+                        .GetLoadAddress(self.target).__int__()
+
+                if load_addr == current_addr:
+                        return prev_addr
+
+                prev_addr = load_addr
+
+        return prev_addr

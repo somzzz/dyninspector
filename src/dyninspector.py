@@ -40,6 +40,7 @@ class DynInspector(QtCore.QObject):
     clear_gui_sig               = QtCore.Signal()
     add_func_selector_sig       = QtCore.Signal(str)
     write_asm_display_sig       = QtCore.Signal(str, int)
+    write_c_display_sig         = QtCore.Signal(str, int)
     write_console_output_sig    = QtCore.Signal(str)
     set_cont_btn_sig            = QtCore.Signal(bool)
     update_got_plt_table        = QtCore.Signal(list, bool)
@@ -122,6 +123,7 @@ class DynInspector(QtCore.QObject):
 
         self.logger.info('set elf ' + elf)
         self.elf = elf
+        self.bp_func = None
         rc = self.debugger.set_elf(elf)
 
         # Console message
@@ -182,6 +184,9 @@ class DynInspector(QtCore.QObject):
         pc, code = self.debugger.print_frame(0)
         self.write_asm_display_sig.emit(code, pc)
 
+        pc, code = self.debugger.print_function(0)
+        self.write_c_display_sig.emit(code, pc)
+
         
     def run_target_dynload(self):
         self.state = self.ExecStates.ON_BP_SHOW_PREV_FRAME
@@ -192,6 +197,9 @@ class DynInspector(QtCore.QObject):
         # Display the current frame
         pc, code = self.debugger.print_frame(0)
         self.write_asm_display_sig.emit(code, pc)
+
+        pc, code = self.debugger.print_function(0)
+        self.write_c_display_sig.emit(code, pc)
 
         # Modules table
         data = self.debugger.get_modules()
@@ -213,11 +221,17 @@ class DynInspector(QtCore.QObject):
             if breakpoint is not None and breakpoint.tag == self.debugger.Breakpoint.RET_FROM_DYN_CALL:
                 pc, code = self.debugger.print_frame(0)
                 self.write_asm_display_sig.emit(code, pc)
+
+                pc, code = self.debugger.print_function(0)
+                self.write_c_display_sig.emit(code, pc)
                 return
 
             # Program stopped on breakpoint
             pc, code = self.debugger.print_frame(1)
             self.write_asm_display_sig.emit(code, pc)
+
+            pc, code = self.debugger.print_function(1)
+            self.write_c_display_sig.emit(code, pc)
 
             # Check of program has ended
             state = self.debugger.get_process_state()
@@ -266,6 +280,9 @@ class DynInspector(QtCore.QObject):
             pc, code = self.debugger.print_frame(0)
             self.write_asm_display_sig.emit(code, pc)
 
+            pc, code = self.debugger.print_function(0)
+            self.write_c_display_sig.emit(code, pc)
+
             self.state = self.ExecStates.ON_BP_SHOW_PREV_FRAME
 
         # Modules table
@@ -287,10 +304,15 @@ class DynInspector(QtCore.QObject):
         func_info = self.debugger.get_func_info(self.bp_func)
 
         if self.state == self.ExecStates.ON_BP_SHOW_PREV_FRAME:
+            self.logger.info("on bp show prev frame")
             b = self.debugger.continue_target()
+            self.logger.info("after on bp show prev frame")
 
             pc, code = self.debugger.print_frame(1)
             self.write_asm_display_sig.emit(code, pc)
+
+            pc, code = self.debugger.print_function(1)
+            self.write_c_display_sig.emit(code, pc)
 
             state = self.debugger.get_process_state()
             if state == self.debugger.ProcessState.STOPPED:
@@ -309,8 +331,13 @@ class DynInspector(QtCore.QObject):
                 self.state = self.ExecStates.EXIT
 
         elif self.state == self.ExecStates.ON_BP_SHOW_CURR_FRAME:
+            self.logger.info("on bp show curr frame")
             pc, code = self.debugger.print_frame(0)
             self.write_asm_display_sig.emit(code, pc)
+
+            pc, code = self.debugger.print_function(0)
+            self.write_c_display_sig.emit(code, pc)
+
             pc = self.debugger.get_pc_from_frame(0)
 
             self.write_console_output_sig.emit("[%s] The function %s has "
@@ -331,6 +358,9 @@ class DynInspector(QtCore.QObject):
 
             pc, code = self.debugger.print_frame(0)
             self.write_asm_display_sig.emit(code, pc)
+
+            pc, code = self.debugger.print_function(0)
+            self.write_c_display_sig.emit(code, pc)
 
             # We are in the PLT, if the got.plt indicates the next plt
             # instruction, then the loader is to be called. Otherwise
@@ -362,6 +392,9 @@ class DynInspector(QtCore.QObject):
             (pc, code) = self.debugger.print_frame(0)
             self.write_asm_display_sig.emit(code, pc)
 
+            pc, code = self.debugger.print_function(0)
+            self.write_c_display_sig.emit(code, pc)
+
             if self.step == 4:
                 self.write_console_output_sig.emit("[%s] Program jumps at "
                     "the beginnig of the .plt section. Here there are "
@@ -383,6 +416,9 @@ class DynInspector(QtCore.QObject):
             pc, code = self.debugger.print_frame(0)
             self.write_asm_display_sig.emit(code, pc)
 
+            pc, code = self.debugger.print_function(0)
+            self.write_c_display_sig.emit(code, pc)
+
             self.logger.info("Returned from PLT")
             self.write_console_output_sig.emit("[%s] Return to caller "
                 "context." % (DEBUG))
@@ -396,6 +432,9 @@ class DynInspector(QtCore.QObject):
 
             pc, code = self.debugger.print_frame(0)
             self.write_asm_display_sig.emit(code, pc)
+
+            pc, code = self.debugger.print_function(0)
+            self.write_c_display_sig.emit(code, pc)
 
             self.state = self.ExecStates.ON_BP_SHOW_PREV_FRAME
             self.write_console_output_sig.emit("[%s] Return to caller "
@@ -448,8 +487,6 @@ class DynInspector(QtCore.QObject):
 
         self.update_got_plt_table.emit([], True)
         for entry in new_data:
-            self.logger.info("Signal emit to update got plt table data  "
-                             + entry.__str__())
             self.update_got_plt_table.emit(entry, False)
 
     def update_sections_table_data(self, new_data):

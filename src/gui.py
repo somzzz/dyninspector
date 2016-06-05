@@ -36,6 +36,8 @@ class MainWindow(QtGui.QWidget):
 
         # Components
         self.asm_display        = None
+        self.c_display          = None
+        self.code_tabs          = None
         self.plt_display        = None
         self.got_plt_table      = None
         self.sections_table     = None
@@ -126,6 +128,7 @@ class MainWindow(QtGui.QWidget):
         self.worker.clear_gui_sig.connect(self.clear)
         self.worker.add_func_selector_sig.connect(self.add_func_selector)
         self.worker.write_asm_display_sig.connect(self.write_asm_display)
+        self.worker.write_c_display_sig.connect(self.write_c_display)
         self.worker.write_console_output_sig.connect(self.write_console_output)
         self.worker.set_cont_btn_sig.connect(self.set_continue_btn)
         self.worker.update_got_plt_table.connect(self.update_got_plt_table)
@@ -158,6 +161,7 @@ class MainWindow(QtGui.QWidget):
         self.logger.info("GUI cleared")
 
         self.asm_display.clear()
+        self.c_display.clear()
         #self.plt_display.clear()
         self.console_output.clear()
 
@@ -235,6 +239,15 @@ class MainWindow(QtGui.QWidget):
         Build the upper part of the display.
         """
 
+        # C display
+        self.c_display = QtGui.QTextEdit(self)
+        self.c_display.setReadOnly(True)
+        self.c_display.setLineWrapMode(QtGui.QTextEdit.NoWrap)
+
+        font = self.c_display.font()
+        font.setFamily("Courier")
+        font.setPointSize(10)
+
         # Asm display
         self.asm_display = QtGui.QTextEdit(self)
         self.asm_display.setReadOnly(True)
@@ -244,7 +257,12 @@ class MainWindow(QtGui.QWidget):
         font.setFamily("Courier")
         font.setPointSize(10)
 
-        self.top_layout.addWidget(self.asm_display)
+        # Code tabs widget
+        self.code_tabs = QtGui.QTabWidget()
+        self.code_tabs.addTab(self.asm_display, "Assembly Code")
+        self.code_tabs.addTab(self.c_display, "Source Code")
+
+        self.top_layout.addWidget(self.code_tabs)
 
         # .got.plt / .plt display
         self.got_plt_table = QtGui.QTableView()
@@ -254,7 +272,7 @@ class MainWindow(QtGui.QWidget):
                                            self.tableheader, self)
         self.got_plt_table.setModel(self.tablemodel)
 
-        self.got_plt_table.setShowGrid(False)
+        self.got_plt_table.setShowGrid(True)
         self.got_plt_table.resizeColumnsToContents()
         self.got_plt_table.resizeRowsToContents()
 
@@ -388,9 +406,20 @@ class MainWindow(QtGui.QWidget):
         """
 
         self.asm_display.setText(text)
-        self.highlight(line)
+        self.highlight(self.asm_display, line)
         for _ in range(line):
             self.asm_display.moveCursor(QtGui.QTextCursor.Down)
+
+    def write_c_display(self, text, line):
+        """
+        Writes text to the c display. The old text is
+        replaced.
+        """
+
+        self.c_display.setText(text)
+        self.highlight(self.c_display, line)
+        for _ in range(line):
+            self.c_display.moveCursor(QtGui.QTextCursor.Down)
 
     def write_console_output(self, text):
         """
@@ -403,13 +432,13 @@ class MainWindow(QtGui.QWidget):
         self.console_output.setText(co_text + '\n' + text)
         self.console_output.moveCursor(QtGui.QTextCursor.End)
 
-    def highlight(self, line):
+    def highlight(self, qtextwidget, line):
         """
         Color a specific line on the asm_display widget.
         The line represents the current instruction in this case.
         """
 
-        cursor = self.asm_display.textCursor()
+        cursor = qtextwidget.textCursor()
         cursor.movePosition(QtGui.QTextCursor.Start)
 
         for _ in range(line):
@@ -424,7 +453,7 @@ class MainWindow(QtGui.QWidget):
 
         hi_selection = QtGui.QTextEdit.ExtraSelection()
         hi_selection.cursor = cursor
-        self.asm_display.setExtraSelections([hi_selection])
+        qtextwidget.setExtraSelections([hi_selection])
 
     def update_got_plt_table(self, entry, clear):
         """
@@ -436,8 +465,6 @@ class MainWindow(QtGui.QWidget):
             self.clear_got_table()
 
         if entry != []:
-            self.logger.info("Appending entry " + entry.__str__()
-                             + " to got plt table.")
             self.got_plt_table_data.append(entry)
             self.got_plt_table.model().layoutChanged.emit()
 

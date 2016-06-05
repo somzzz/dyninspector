@@ -5,9 +5,14 @@ Please send any feedback via [this form](https://docs.google.com/forms/d/1X-_MuD
 
 ## Project Requirements
 
-- 32bit Unix system
+- 32 bit Unix system (works fine on Ubuntu 14.04)
+```
+Note: lldb 3-6 does not function properly on Ubuntu 16.04 and for this reason this tool can't be used on that system.
+If you encounter problems on any other 32bit Unix system, please let me know!
+```
 - pyhton pyside
 - lldb-3.6
+- Intel x86 ISA
 
 ## Get the Project
 
