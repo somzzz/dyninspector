@@ -56,14 +56,17 @@ class MainWindow(QtGui.QWidget):
         self.got_plt_table_data     = []
         self.tablemodel             = None
         self.tableheader            = None
+        self.got_plt_table_window   = None
 
         self.sections_table_data    = []
         self.sections_tablemodel    = None
         self.sections_tableheader   = None
+        self.sections_table_window  = None
 
         self.modules_table_data    = []
         self.modules_tablemodel    = None
         self.modules_tableheader   = None
+        self.modules_table_window  = None
 
         # Layouts
         self.layout     = QtGui.QVBoxLayout()
@@ -104,11 +107,11 @@ class MainWindow(QtGui.QWidget):
         self.worker.set_app_mode_sig.emit(self.worker.AppMode.DYN_LINK)
 
     def create_dynlink_iface(self):
-        self.modules_table.setVisible(False)
+        self.modules_table_window.setVisible(False)
 
         self.selectAction.setVisible(True)
-        self.sections_table.setVisible(True)
-        self.got_plt_table.setVisible(True)
+        self.sections_table_window.setVisible(True)
+        self.got_plt_table_window.setVisible(True)
 
         self.modeAction.setText("Dynamic Linking / Lazy Binding Inspector")
 
@@ -120,11 +123,11 @@ class MainWindow(QtGui.QWidget):
         self.modeAction.setText("Dynamic Loading Inspector")
 
     def create_dynload_iface(self):
-        self.got_plt_table.setVisible(False)
-        self.sections_table.setVisible(False)
+        self.got_plt_table_window.setVisible(False)
+        self.sections_table_window.setVisible(False)
         self.selectAction.setVisible(False)
 
-        self.modules_table.setVisible(True)
+        self.modules_table_window.setVisible(True)
 
 
     def connect_signals(self):
@@ -298,7 +301,12 @@ class MainWindow(QtGui.QWidget):
         self.top_layout.addWidget(self.code_tabs)
 
         # .got.plt / .plt display
-        self.got_plt_table = QtGui.QTableView()
+        self.got_plt_table_window = QtGui.QTabWidget(self)
+        self.top_layout.addWidget(self.got_plt_table_window)
+        
+        self.got_plt_table = QtGui.QTableView(self.got_plt_table_window)
+        self.got_plt_table_window.addTab(self.got_plt_table,
+            "Intermediate Stubs Address Table")
 
         self.tableheader = ['Function name', 'Intermediate Stub Location Address', 'Function Address']
         self.tablemodel = GotPltTableModel(self.got_plt_table_data,
@@ -317,13 +325,13 @@ class MainWindow(QtGui.QWidget):
 
         self.got_plt_table.resizeColumnsToContents()
 
-        self.top_layout.addWidget(self.got_plt_table)
 
     def build_bottom_layout(self):
         """
         Build the lower part of the display.
         """
 
+        tabWidget = QtGui.QTabWidget(self)
         self.console_output = QtGui.QTextEdit(self)
         self.console_output.setReadOnly(True)
         self.console_output.setLineWrapMode(QtGui.QTextEdit.NoWrap)
@@ -332,10 +340,16 @@ class MainWindow(QtGui.QWidget):
         font.setFamily("Courier")
         font.setPointSize(10)
 
-        self.bot_layout.addWidget(self.console_output)
+        tabWidget.addTab(self.console_output, "Console Output")
+        self.bot_layout.addWidget(tabWidget)
 
         # sections table
+        self.sections_table_window = QtGui.QTabWidget(self)
+        self.bot_layout.addWidget(self.sections_table_window)
+
         self.sections_table = QtGui.QTableView()
+        self.sections_table_window.addTab(self.sections_table,
+            "Executable Sections Table")
 
         self.sections_tableheader = ['First Address', 'Last Address',
                                      'Name', 'Program Counter']
@@ -356,10 +370,13 @@ class MainWindow(QtGui.QWidget):
         hh.setStretchLastSection(False)
 
         self.sections_table.resizeColumnsToContents()
-        self.bot_layout.addWidget(self.sections_table)
 
         # module table
+        self.modules_table_window = QtGui.QTabWidget(self)
+        self.bot_layout.addWidget(self.modules_table_window)
         self.modules_table = QtGui.QTableView()
+        self.modules_table_window.addTab(self.modules_table,
+            "Executable Module/Shared Libraries Table")
 
         self.modules_tableheader = ['Type', 'First Address', 'Last Address', 'Size',
                                      'Name']
@@ -380,7 +397,6 @@ class MainWindow(QtGui.QWidget):
         hh.setStretchLastSection(False)
 
         self.modules_table.resizeColumnsToContents()
-        self.bot_layout.addWidget(self.modules_table)
 
     def on_elf_set(self, status):
         self.startAction.setEnabled(status)
