@@ -829,7 +829,7 @@ class DynLldb(object):
                 code = 'The original code can\'t be displayed. ' \
                     'Either the program was not compiled with debugging ' \
                     'symbols or the current frame does not have a corresponding ' \
-                    'function in the source code. Please check the assembly ' \
+                    'function in the source code. \n Please check the assembly ' \
                     'code for more details.'
             else:
                 # Debug info is available for 'function'.
