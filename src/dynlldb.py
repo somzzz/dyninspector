@@ -814,6 +814,13 @@ class DynLldb(object):
         code = ''
         line = -1
 
+        if self.is_compiled_with_debug_symbols() is False:
+            code = 'The original code can\'t be displayed. ' \
+                'The program was not compiled with debugging symbols.'
+            line = -2
+
+            return line, code
+
         state = self.process.GetState()
         if state == lldb.eStateStopped:
             thread  = self.process.GetThreadAtIndex(0)
