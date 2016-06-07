@@ -465,7 +465,7 @@ class DynLldb(object):
 
                             plt_func.got_entry       = self.GotFuncInfo()
                             plt_func.got_entry.addr  = got_plt_addr[1:]
-                            plt_func.got_entry.value = got_plt_value.__hex__()
+                            plt_func.got_entry.value = hex(got_plt_value.__int__()).rstrip("L")
 
                             self.plt[plt_func.name] = plt_func
 
@@ -484,7 +484,7 @@ class DynLldb(object):
             got_plt_value = self.process.ReadPointerFromMemory(
                 int(got_plt_addr, 16), lldb.SBError())
 
-            entry.got_entry.value = got_plt_value.__hex__()
+            entry.got_entry.value = hex(got_plt_value.__int__()).rstrip("L")
 
     # Debugging Status
 
@@ -587,7 +587,7 @@ class DynLldb(object):
             for sec in m.section_iter():
                 load_addr = sec.GetLoadAddress(self.target)
 
-                if hex(load_addr) == "0xffffffffffffffffL":
+                if hex(load_addr).rstrip("L") == "0xffffffffffffffff":
                     continue;
 
                 # Module start address
@@ -602,7 +602,7 @@ class DynLldb(object):
                 mod_size += size
 
             if start_addr is not None:
-                module = [hex(start_addr), hex(end_addr), hex(mod_size), m.__str__()]
+                module = [hex(start_addr).rstrip("L"), hex(end_addr).rstrip("L"), hex(mod_size).rstrip("L"), m.__str__()]
                 modules.append(module)
 
         return modules
@@ -686,10 +686,10 @@ class DynLldb(object):
                     size = sec.size
                     mod_name = mod.__str__()
                     if pc >= load_addr and pc <= load_addr + size:
-                        sec_data = [hex(load_addr), hex(load_addr + size),
-                                    mod_name + sec.GetName(), hex(pc)]
+                        sec_data = [hex(load_addr).rstrip("L"), hex(int(load_addr) + size).rstrip("L"),
+                                    mod_name + sec.GetName(), hex(pc).rstrip("L")]
                     else:
-                        sec_data = [hex(load_addr), hex(load_addr + size),
+                        sec_data = [hex(load_addr).rstrip("L"), hex(load_addr + size).rstrip("L"),
                                     mod_name + sec.GetName(), ""]
                     sections.append(sec_data)
 
@@ -732,6 +732,35 @@ class DynLldb(object):
 
         return False
 
+    # Modifty stuff
+
+    def write_word_to_address(self, addr, word):
+        """
+        Write a word (4 bytes on 32b) at the given address.
+        Much WOW. Such code. Very hack.
+        """
+
+        if self.process is None:
+            return
+
+        word = str(hex(word))
+        word = word[2:].zfill(8)[::-1]
+
+        value = ''
+        for i, j in zip(word[::2], word[1::2]):
+            value += j
+            value += i
+
+        error = lldb.SBError()
+        self.process.WriteMemory(addr, value.decode("hex"), error)
+        if not error.Success():
+            return None
+
+        # Update internal data structure for got entries
+        self.read_got()
+
+        return 0
+
     # Printing
 
     def print_frame(self, idx):
@@ -773,11 +802,11 @@ class DynLldb(object):
 
                     line = ''
                     if comment:
-                        line += "0x%0.7X <%s> %8s %s \t\t ; %s" \
+                        line += "0x%0.7x <%s> %8s %s \t\t ; %s" \
                             % (load_addr, sym_offset,
                                 mnemonic, operands, comment)
                     else:
-                        line += "0x%0.7X <%s> %8s %s \t\t" \
+                        line += "0x%0.7x <%s> %8s %s \t\t" \
                             % (load_addr, sym_offset, mnemonic, operands)
 
                     if load_addr == pc.__int__():

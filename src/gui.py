@@ -304,11 +304,11 @@ class MainWindow(QtGui.QWidget):
         self.got_plt_table_window = QtGui.QTabWidget(self)
         self.top_layout.addWidget(self.got_plt_table_window)
         
-        self.got_plt_table = QtGui.QTableView(self.got_plt_table_window)
+        self.got_plt_table = GotPltTableView(self, self.click_me)
         self.got_plt_table_window.addTab(self.got_plt_table,
             "Intermediate Stubs Address Table")
 
-        self.tableheader = ['Function name', 'Intermediate Stub Location Address', 'Function Address']
+        self.tableheader = ['Function name', 'Intermediate Stub Location Address', 'Function Address', ' ']
         self.tablemodel = GotPltTableModel(self.got_plt_table_data,
                                            self.tableheader, self)
         self.got_plt_table.setModel(self.tablemodel)
@@ -526,6 +526,47 @@ class MainWindow(QtGui.QWidget):
         hi_selection.cursor = cursor
         qtextwidget.setExtraSelections([hi_selection])
 
+    def click_me(self):
+        """
+        A very clickable function. \o/
+                                    |
+                                   / \
+        """
+        button = QtGui.qApp.focusWidget()
+        # or button = self.sender()
+
+        index = self.got_plt_table.indexAt(button.pos())
+        if index.isValid() is False:
+            return
+
+        text, ok = QtGui.QInputDialog.getText(self, 'Got Plt Editor', 
+            'The value you introduce might crash'
+            ' the program or result in unexpected'
+            ' behaviour!\nEnter a valid 32bit hex address:')
+        
+        if ok:
+            if text.lower().startswith('0x'):
+                try:
+                    hexval = int(text, 16)
+                    model = self.got_plt_table.model()
+                    idx = model.index(index.row(), 1)
+                    addr = model.data(idx, QtCore.Qt.DisplayRole)
+                    addr = int(addr, 16)
+                    self.worker.write_hex_value_sig.emit(addr, hexval)
+                    self.logger.info('That is a valid hex value.')
+                except:
+                    self.logger.info('That is an invalid hex value.')
+                    msgBox = QtGui.QMessageBox()
+                    msgBox.setWindowTitle("DynInspector")
+                    msgBox.setText("Invalid address! Example: 0x12345678 ")
+                    msgBox.exec_()
+            else:
+                self.logger.info('That is an invalid hex value.')
+                msgBox = QtGui.QMessageBox()
+                msgBox.setWindowTitle("DynInspector")
+                msgBox.setText("Invalid address! Example: 0x12345678 ")
+                msgBox.exec_() 
+
     def update_got_plt_table(self, entry, clear):
         """
         Append an entry to the .got.plt table widget. Clear
@@ -536,6 +577,7 @@ class MainWindow(QtGui.QWidget):
             self.clear_got_table()
 
         if entry != []:
+            entry.append("Edit")
             self.got_plt_table_data.append(entry)
             self.got_plt_table.model().layoutChanged.emit()
 
@@ -624,8 +666,46 @@ class TabDialog(QtGui.QDialog):
 
         help_tabs.addTab(lazy_bind_tab, "Lazy binding")
 
-        layout.addWidget(help_tabs)
+        layout.addWidget(help_tabs)     
 
+class ButtonDelegate(QtGui.QItemDelegate):
+    """
+    A delegate that places a fully functioning QPushButton in every
+    cell of the column to which it's applied
+    """
+    def __init__(self, parent):
+        QtGui.QItemDelegate.__init__(self, parent)
+ 
+    def paint(self, painter, option, index):
+        if not self.parent().indexWidget(index):
+            button = QtGui.QPushButton(
+                        '', 
+                        self.parent(), 
+                        clicked=self.parent().cellButtonClicked
+                    )
+            path = os.path.join(os.path.dirname(sys.modules[__name__].__file__), 'res/hack.png')
+            button.setIcon(QtGui.QIcon(path))
+            button.setFlat(True)
+            button.setToolTip("Edit Function Address")
+            self.parent().setIndexWidget(
+                index, 
+                button
+            )
+
+class GotPltTableView(QtGui.QTableView):
+    """
+    A simple table to demonstrate the button delegate.
+    """
+    def __init__(self, obj, callback, *args, **kwargs):
+        QtGui.QTableView.__init__(self, *args, **kwargs)
+
+        self.object = obj
+        self.callback = callback
+        self.setItemDelegateForColumn(3, ButtonDelegate(self))
+ 
+    def cellButtonClicked(self):
+        self.callback()
+ 
 class GotPltTableModel(QtCore.QAbstractTableModel):
     """
     Module for the widget to dispay the .got.plt entries.

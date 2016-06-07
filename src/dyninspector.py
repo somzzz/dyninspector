@@ -35,6 +35,7 @@ class DynInspector(QtCore.QObject):
     continue_target_sig = QtCore.Signal()
     set_breakpoint_sig  = QtCore.Signal(str)
     set_app_mode_sig    = QtCore.Signal(int)
+    write_hex_value_sig = QtCore.Signal(long, long)
 
     # To GUI
     clear_gui_sig               = QtCore.Signal()
@@ -106,6 +107,7 @@ class DynInspector(QtCore.QObject):
         self.continue_target_sig.connect(self.continue_target)
         self.set_breakpoint_sig.connect(self.set_breakpoint)
         self.set_app_mode_sig.connect(self.set_app_mode)
+        self.write_hex_value_sig.connect(self.write_word_to_address)
 
     def set_app_mode(self, mode):
         self.mode = mode
@@ -533,6 +535,13 @@ class DynInspector(QtCore.QObject):
         self.update_modules_table.emit([], True)
         for entry in new_data:
             self.update_modules_table.emit(entry, False)
+
+    def write_word_to_address(self, address, word):
+        self.debugger.write_word_to_address(address, word)
+
+        # Update Got with new data
+        data = self.debugger.get_got()
+        self.update_got_plt_table_data(data)
 
 def main():
     """
