@@ -308,7 +308,7 @@ class MainWindow(QtGui.QWidget):
         self.got_plt_table_window.addTab(self.got_plt_table,
             "Intermediate Stubs Address Table")
 
-        self.tableheader = ['Function name', 'Intermediate Stub Location Address', 'Function Address', ' ']
+        self.tableheader = ['', 'Function name', 'Intermediate Stub Location Address', 'Function Address']
         self.tablemodel = GotPltTableModel(self.got_plt_table_data,
                                            self.tableheader, self)
         self.got_plt_table.setModel(self.tablemodel)
@@ -321,9 +321,10 @@ class MainWindow(QtGui.QWidget):
         vh.setVisible(False)
 
         hh = self.got_plt_table.horizontalHeader()
-        hh.setStretchLastSection(True)
-
-        self.got_plt_table.resizeColumnsToContents()
+        hh.setResizeMode(0, QtGui.QHeaderView.ResizeToContents)
+        hh.setResizeMode(1, QtGui.QHeaderView.ResizeToContents)
+        hh.setResizeMode(2, QtGui.QHeaderView.ResizeToContents)
+        hh.setResizeMode(3, QtGui.QHeaderView.Stretch)
 
 
     def build_bottom_layout(self):
@@ -367,9 +368,10 @@ class MainWindow(QtGui.QWidget):
         vh.setVisible(False)
 
         hh = self.sections_table.horizontalHeader()
-        hh.setStretchLastSection(False)
-
-        self.sections_table.resizeColumnsToContents()
+        hh.setResizeMode(0, QtGui.QHeaderView.ResizeToContents)
+        hh.setResizeMode(1, QtGui.QHeaderView.ResizeToContents)
+        hh.setResizeMode(2, QtGui.QHeaderView.ResizeToContents)
+        hh.setResizeMode(3, QtGui.QHeaderView.Stretch)
 
         # module table
         self.modules_table_window = QtGui.QTabWidget(self)
@@ -394,9 +396,11 @@ class MainWindow(QtGui.QWidget):
         vh.setVisible(False)
 
         hh = self.modules_table.horizontalHeader()
-        hh.setStretchLastSection(False)
-
-        self.modules_table.resizeColumnsToContents()
+        hh.setResizeMode(0, QtGui.QHeaderView.ResizeToContents)
+        hh.setResizeMode(1, QtGui.QHeaderView.ResizeToContents)
+        hh.setResizeMode(2, QtGui.QHeaderView.ResizeToContents)
+        hh.setResizeMode(3, QtGui.QHeaderView.ResizeToContents)
+        hh.setResizeMode(4, QtGui.QHeaderView.Stretch)
 
     def on_elf_set(self, status):
         self.startAction.setEnabled(status)
@@ -577,13 +581,15 @@ class MainWindow(QtGui.QWidget):
             self.clear_got_table()
 
         if entry != []:
-            entry.append("Edit")
+            entry.insert(0, "Edit")
             self.got_plt_table_data.append(entry)
             self.got_plt_table.model().layoutChanged.emit()
 
-        self.got_plt_table.resizeColumnsToContents()
         hh = self.got_plt_table.horizontalHeader()
-        hh.setStretchLastSection(True)
+        hh.setResizeMode(0, QtGui.QHeaderView.ResizeToContents)
+        hh.setResizeMode(1, QtGui.QHeaderView.ResizeToContents)
+        hh.setResizeMode(2, QtGui.QHeaderView.ResizeToContents)
+        hh.setResizeMode(3, QtGui.QHeaderView.Stretch)
 
     def update_sections_table(self, entry, clear):
         """
@@ -598,9 +604,11 @@ class MainWindow(QtGui.QWidget):
             self.sections_table_data.append(entry)
             self.sections_table.model().layoutChanged.emit()
 
-        self.sections_table.resizeColumnsToContents()
         hh = self.sections_table.horizontalHeader()
-        hh.setStretchLastSection(True)
+        hh.setResizeMode(0, QtGui.QHeaderView.ResizeToContents)
+        hh.setResizeMode(1, QtGui.QHeaderView.ResizeToContents)
+        hh.setResizeMode(2, QtGui.QHeaderView.ResizeToContents)
+        hh.setResizeMode(3, QtGui.QHeaderView.Stretch)
 
     def update_modules_table(self, entry, clear):
         """
@@ -615,9 +623,12 @@ class MainWindow(QtGui.QWidget):
             self.modules_table_data.append(entry)
             self.modules_table.model().layoutChanged.emit()
 
-        self.modules_table.resizeColumnsToContents()
         hh = self.modules_table.horizontalHeader()
-        hh.setStretchLastSection(True)
+        hh.setResizeMode(0, QtGui.QHeaderView.ResizeToContents)
+        hh.setResizeMode(1, QtGui.QHeaderView.ResizeToContents)
+        hh.setResizeMode(2, QtGui.QHeaderView.ResizeToContents)
+        hh.setResizeMode(3, QtGui.QHeaderView.ResizeToContents)
+        hh.setResizeMode(4, QtGui.QHeaderView.Stretch)
 
 class TabDialog(QtGui.QDialog):
 
@@ -701,7 +712,7 @@ class GotPltTableView(QtGui.QTableView):
 
         self.object = obj
         self.callback = callback
-        self.setItemDelegateForColumn(3, ButtonDelegate(self))
+        self.setItemDelegateForColumn(0, ButtonDelegate(self))
  
     def cellButtonClicked(self):
         self.callback()
