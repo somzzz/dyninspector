@@ -10,3 +10,6 @@ Linux this is done using the 'dlopen', 'dlsym' and 'dlclose' set of functions.
 The shared library is mapped into the program memory with 'dlopen'.
 Symbols are resolved using 'dlsym' one by one.
 The library is removed from the memory using 'dlclose'.
+
+In the "Dynamic Loading Inspector" application mode you can
+step through the program and observe how dynamic loading happens.
