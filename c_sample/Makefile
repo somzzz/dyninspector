@@ -8,7 +8,7 @@ lib:
 	sudo ldconfig
 
 main:
-	gcc -m32 sample.c -o sample -g -ldl -Wall
+	gcc -m32 sample.c -g -o sample -ldl -Wall
 
 clean:
 	rm *o sample
