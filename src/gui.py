@@ -77,19 +77,6 @@ class MainWindow(QtGui.QWidget):
         self.create_toolbar()
         self.layout.addWidget(self.toolbar)
 
-        # Menu
-        self.menu = QtGui.QMenuBar(self)
-        m = QtGui.QMenu('App Mode', self.menu)
-        self.menu.addMenu(m)
-
-        dynlink_action = QtGui.QAction('Dynamic Linking / Lazy Binding Inspector', m, checkable=False)
-        dynlink_action.triggered.connect(self.show_dynlink_iface)
-        m.addAction(dynlink_action)
-
-        dynload_action = QtGui.QAction('Dynamic Loading Inspector', m, checkable=False)
-        dynload_action.triggered.connect(self.show_dynload_iface)
-        m.addAction(dynload_action)
-
         self.build_top_layout()
         self.build_bottom_layout()
 
@@ -211,8 +198,9 @@ class MainWindow(QtGui.QWidget):
         Build the app toolbar
         """
 
-        # Open File button
         self.toolbar = QtGui.QToolBar(self)
+
+        # Open File button
         path = os.path.join(os.path.dirname(sys.modules[__name__].__file__), 'res/open.png')
         self.openAction = QtGui.QAction(QtGui.QIcon(path), 'Open ELF executable', self)
         self.toolbar.addAction(self.openAction)
@@ -253,9 +241,23 @@ class MainWindow(QtGui.QWidget):
         # Program mode
         self.modeAction = QtGui.QPushButton(self.toolbar)
         self.modeAction.setText("Application Mode")
+        self.modeAction.setToolTip("Change the application mode")
         self.modeAction.setFlat(True)
         self.toolbar.addWidget(self.modeAction)
-        self.modeAction.setEnabled(False)
+        self.modeAction.setEnabled(True)
+
+        # Button Menu
+        self.menu = QtGui.QMenu('App Mode')
+
+        dynlink_action = QtGui.QAction('Dynamic Linking / Lazy Binding Inspector', self.menu, checkable=False)
+        dynlink_action.triggered.connect(self.show_dynlink_iface)
+        self.menu.addAction(dynlink_action)
+
+        dynload_action = QtGui.QAction('Dynamic Loading Inspector', self.menu, checkable=False)
+        dynload_action.triggered.connect(self.show_dynload_iface)
+        self.menu.addAction(dynload_action)
+
+        self.modeAction.setMenu(self.menu)
 
         # Debug Symbols status
         path = os.path.join(os.path.dirname(sys.modules[__name__].__file__), 'res/cute_debug.png')

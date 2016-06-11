@@ -5,7 +5,7 @@ Please send any feedback via [this form](https://docs.google.com/forms/d/1X-_MuD
 
 ## Project Requirements
 
-- 32 bit Unix system (works fine on Ubuntu 14.04)
+- ***32 bit Unix system (works fine on Ubuntu 14.04)***
 ```
 Note: lldb 3-6 does not function properly on Ubuntu 16.04 and for this reason this tool can't be used on that system.
 If you encounter problems on any other 32bit Unix system, please let me know!
@@ -65,7 +65,15 @@ python dyninspector.py
 ## Tool Usage
 
 The tool can inspect ELF 32-bit LSB executables, Intel 80386.
-A sample C program can be found in the c_samples directory of the project. To build the program:
+A sample C program can be found in the c_samples directory of the project, but I enourage you to test your own executables.
+
+The tool can only analyse serial code, parallel execution is not supported.
+
+Also, be careful when testing blocking functions (eg sockets) as the tool will block as well and continue to the next
+breakpoint set as soon as it leaves the blocking context.
+
+
+To build the C program:
 
 ```
 cd c_sample
@@ -73,3 +81,7 @@ make
 ```
 
 You can then open it from the DynInspector gui menu (Open ELF executable button).
+
+The tool has 2 distinct debug modes in order to make the processes clear:
+- one for analysing the dynamic linking / lazy binding process
+- one for analysing the dynamic loading process
