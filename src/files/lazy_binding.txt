@@ -1,0 +1,35 @@
+Lazy binding is a mechanism which postpones address resolution for a function
+from a shared library until it is first called. The symbol is resolved when 
+the library is loaded into the program address space, but the location of the
+function code is not known by the program at that point.
+
+On 32bit Linux lazy binding makes use of the .got.plt and .plt sections of the
+executable.
+
+.got.plt is similar to a hashtable: it stores pointers to the beginning of the
+actual code for the functions in the shared libraries. At the beginning, when
+these address are not known, the pointer indicates to a stub area (the .plt)
+
+.plt contains a small stub area for each function from a shared library. Every
+call to these functions is actually made to the address of the stub, not the
+function routine itself.
+
+A .plt stub has the following format:
+- a jump to the address indicated by the corresponding .got.plt pointer
+- a push on the stack of the address where the dynamic linker should store
+the function routine (after it figures it out)
+- a jump to a segment of code which calls the dynamic linker (located at the
+beginning of the .plt segment)
+
+On the first call to a function, the .plt stub is called and the .got.plt
+pointer points back to the next instruction in the .plt. This means that
+the jump to the code which invokes the dynamic linker to fix the routine
+address is executed.
+
+On the second call, the pointer from the .got.plt already indicates the
+actual routine of the function, so invoking the dynamic linker is
+bypassed.
+
+In the "Dynamic Linking /  Lazy Binding Inspector" application mode you can
+step through the program and observe the steps described above for lazy
+binding.

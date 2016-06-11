@@ -1,0 +1,12 @@
+Loading is of two types: static and dynamic.
+
+Static loading happens automatically when you run a program. The executable
+is loaded into the memory. The shared libraries which are requried are also
+loaded, actually mapped, into the address space of the program. All the 
+symbols are resolved.
+
+Dynamic loading happens during runtime and is done manually by the user. On
+Linux this is done using the 'dlopen', 'dlsym' and 'dlclose' set of functions.
+The shared library is mapped into the program memory with 'dlopen'.
+Symbols are resolved using 'dlsym' one by one.
+The library is removed from the memory using 'dlclose'.

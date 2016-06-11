@@ -1,0 +1,19 @@
+Linking is of two types: static and dynamic.
+
+Static linking happens at compile time and is responsible for:
+- resolving symbols from all object files and static libraries
+- adding information to the executable about the dynamic libraries required
+
+Dynamic linking happens at load and runtime. It involves calling the dynamic
+linker on the system, which on Linux is ld.so. The dynamic linker performs
+two main tasks:
+- resolves symbols after a shared library is loaded
+- resolves the addresses of routines
+
+Dynamic linking is strongly coupled with a mechanism called 'lazy binding'
+(or 'lazy procedure linkage'). It refers to postponing address resolution
+(task of the dynamic linker) for a routine until it is first called.
+
+In the "Dynamic Linking /  Lazy Binding Inspector" application mode you can
+step through the program and observe exactly how dynamic linking and lazy
+binding happen.

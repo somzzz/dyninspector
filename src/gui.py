@@ -649,30 +649,47 @@ class TabDialog(QtGui.QDialog):
         dynlink_layout = QtGui.QVBoxLayout()
         dynlink_tab.setLayout(dynlink_layout)
 
+        path = os.path.join(os.path.dirname(sys.modules[__name__].__file__), 'files/dynamic_linking.txt')
+        file = open(path, 'r')
+        text = file.read()
+        file.close()
+
         dynlink_text = QtGui.QTextEdit(dynlink_tab)
-        dynlink_text.setText("Some info about dynamic linking.")
+        dynlink_text.setText(text)
         dynlink_layout.addWidget(dynlink_text)
 
         help_tabs.addTab(dynlink_tab, "Dynamic Linking")
 
         # Dynamic loading info tab
+
+        path = os.path.join(os.path.dirname(sys.modules[__name__].__file__), 'files/dynamic_loading.txt')
+        file = open(path, 'r')
+        text = file.read()
+        file.close()
+
         dynload_tab = QtGui.QWidget()
         dynload_layout = QtGui.QVBoxLayout()
         dynload_tab.setLayout(dynload_layout)
 
         dynload_text = QtGui.QTextEdit(dynload_tab)
-        dynload_text.setText("Some info about dynamic loading.")
+        dynload_text.setText(text)
         dynload_layout.addWidget(dynload_text)
 
         help_tabs.addTab(dynload_tab, "Dynamic Loading")
 
         # Lazy binding info tab
+
+        path = os.path.join(os.path.dirname(sys.modules[__name__].__file__), 'files/lazy_binding.txt')
+        file = open(path, 'r')
+        text = file.read()
+        file.close()
+
         lazy_bind_tab = QtGui.QWidget()
         lazy_bind_layout = QtGui.QVBoxLayout()
         lazy_bind_tab.setLayout(lazy_bind_layout)
 
         lazy_bind_text = QtGui.QTextEdit(lazy_bind_tab)
-        lazy_bind_text.setText("Some info about lazy binding.")
+        lazy_bind_text.setText(text)
         lazy_bind_layout.addWidget(lazy_bind_text)
 
         help_tabs.addTab(lazy_bind_tab, "Lazy binding")

@@ -881,6 +881,7 @@ class DynLldb(object):
                     return line, "Could not find source file."
 
                 code = file.read()
+                file.close()
                 line = line_num
 
         return line, code
