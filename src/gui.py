@@ -658,6 +658,7 @@ class TabDialog(QtGui.QDialog):
 
         dynlink_text = QtGui.QTextEdit(dynlink_tab)
         dynlink_text.setText(text)
+        dynlink_text.setReadOnly(True)
         dynlink_layout.addWidget(dynlink_text)
 
         help_tabs.addTab(dynlink_tab, "Dynamic Linking")
@@ -674,6 +675,7 @@ class TabDialog(QtGui.QDialog):
         dynload_tab.setLayout(dynload_layout)
 
         dynload_text = QtGui.QTextEdit(dynload_tab)
+        dynload_text.setReadOnly(True)
         dynload_text.setText(text)
         dynload_layout.addWidget(dynload_text)
 
@@ -692,6 +694,7 @@ class TabDialog(QtGui.QDialog):
 
         lazy_bind_text = QtGui.QTextEdit(lazy_bind_tab)
         lazy_bind_text.setText(text)
+        lazy_bind_text.setReadOnly(True)
         lazy_bind_layout.addWidget(lazy_bind_text)
 
         help_tabs.addTab(lazy_bind_tab, "Lazy binding")

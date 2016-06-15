@@ -14,10 +14,10 @@ these address are not known, the pointer indicates to a stub area (the .plt)
 call to these functions is actually made to the address of the stub, not the
 function routine itself.
 
-A .plt stub has the following format:
+A .plt stub executes the following instructions:
 - a jump to the address indicated by the corresponding .got.plt pointer
-- a push on the stack of the address where the dynamic linker should store
-the function routine (after it figures it out)
+- the address where the dynamic linker should store
+the function routine (after it figures it out) is pushed on the stack 
 - a jump to a segment of code which calls the dynamic linker (located at the
 beginning of the .plt segment)
 

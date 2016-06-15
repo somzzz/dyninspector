@@ -279,7 +279,7 @@ class DynInspector(QtCore.QObject):
                 self.state = self.ExecStates.ON_BP_SHOW_CURR_FRAME
                 pc = self.debugger.get_pc_from_frame(0)
                 sym, mod = self.debugger.get_symbol_module(pc)
-                self.write_console_output_sig.emit("[%s] Symbol for function "
+                self.write_console_output_sig.emit("[%s] Function "
                     "%s from library %s called." % (DEBUG, sym, mod))
             
             if breakpoint.tag == self.debugger.Breakpoint.RET_FROM_DLOPEN or \
@@ -394,7 +394,7 @@ class DynInspector(QtCore.QObject):
 
                 self.write_console_output_sig.emit("[%s] It is the first "
                     "call to %s. Lazy binding takes place. Jump returns to "
-                    "the .PLT. The dynamic linker will be "
+                    "the .PLT stub. The dynamic linker will be "
                     "called." % (DEBUG, func_info.name))
             else:
                 self.state = self.ExecStates.CALL_FUNC
