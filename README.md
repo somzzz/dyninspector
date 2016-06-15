@@ -1,6 +1,8 @@
 # dyninspector
 Diploma Project
 
+DynInspector is a tool which offers a user-friendly graphical user interface for analysing dynamic linking and dynamic loading for ELF executables on the Intel x86 architecture.
+
 Please send any feedback via [this form](https://docs.google.com/forms/d/1X-_MuDogIjQN7RHOGBHhO0nEZIXxs44G3oKWxrThaSo/viewform).
 
 ## Project Requirements

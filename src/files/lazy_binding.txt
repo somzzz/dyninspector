@@ -22,9 +22,9 @@ the function routine (after it figures it out) is pushed on the stack
 beginning of the .plt segment)
 
 On the first call to a function, the .plt stub is called and the .got.plt
-pointer points back to the next instruction in the .plt. This means that
+pointer points back to the next instruction in the .plt stub. This means that
 the jump to the code which invokes the dynamic linker to fix the routine
-address is executed.
+address will be executed.
 
 On the second call, the pointer from the .got.plt already indicates the
 actual routine of the function, so invoking the dynamic linker is
