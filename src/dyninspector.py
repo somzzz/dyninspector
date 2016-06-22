@@ -43,6 +43,7 @@ class DynInspector(QtCore.QObject):
     write_asm_display_sig       = QtCore.Signal(str, int)
     write_c_display_sig         = QtCore.Signal(str, int)
     write_console_output_sig    = QtCore.Signal(str)
+    write_stdout_sig            = QtCore.Signal(str)
     set_cont_btn_sig            = QtCore.Signal(bool)
     update_got_plt_table        = QtCore.Signal(list, bool)
     update_sections_table       = QtCore.Signal(list, bool)
@@ -145,7 +146,6 @@ class DynInspector(QtCore.QObject):
         
         # Debug symbols
         debug_sym = self.debugger.is_compiled_with_debug_symbols()
-        print debug_sym
         self.has_compile_symbols_sig.emit(debug_sym)
 
         self.state = self.ExecStates.START_BP_SET
@@ -256,6 +256,7 @@ class DynInspector(QtCore.QObject):
             if state == self.debugger.ProcessState.EXITED:
                 self.write_console_output_sig.emit("[%s] Execution finished. "
                     "Process exited normally." % (DEBUG))
+
                 self.set_cont_btn_sig.emit(False)
                 self.write_c_display_sig.emit("", -1)
 
@@ -308,6 +309,10 @@ class DynInspector(QtCore.QObject):
         # Modules table
         data = self.debugger.get_modules()
         self.update_modules_table_data(data)
+
+        # stdout
+        out = self.debugger.get_stdout()
+        self.write_stdout_sig.emit(out)
 
 
     def continue_target_dynlink(self):
@@ -479,6 +484,10 @@ class DynInspector(QtCore.QObject):
         # Update sections table data
         data = self.debugger.get_sections()
         self.update_sections_table_data(data)
+
+        # stdout
+        out = self.debugger.get_stdout()
+        self.write_stdout_sig.emit(out)
 
     def set_breakpoint(self, func):
         """

@@ -6,6 +6,7 @@ dyninspector tool.
 import os
 import sys
 import logging
+import threading
 from PySide import QtCore, QtGui
 
 
@@ -51,6 +52,8 @@ class MainWindow(QtGui.QWidget):
         self.debugAction        = None
         self.modeAction         = None
         self.helpAction         = None
+        self.input              = None
+        self.output             = None
 
         # Data
         self.got_plt_table_data     = []
@@ -127,6 +130,7 @@ class MainWindow(QtGui.QWidget):
         self.worker.write_asm_display_sig.connect(self.write_asm_display)
         self.worker.write_c_display_sig.connect(self.write_c_display)
         self.worker.write_console_output_sig.connect(self.write_console_output)
+        self.worker.write_stdout_sig.connect(self.write_stdout)
         self.worker.set_cont_btn_sig.connect(self.set_continue_btn)
         self.worker.update_got_plt_table.connect(self.update_got_plt_table)
         self.worker.update_sections_table.connect(self.update_sections_table)
@@ -163,6 +167,7 @@ class MainWindow(QtGui.QWidget):
         self.c_display.clear()
         #self.plt_display.clear()
         self.console_output.clear()
+        self.output.clear()
 
         self.func_selector.clear()
         self.clear_got_table()
@@ -335,6 +340,9 @@ class MainWindow(QtGui.QWidget):
         """
 
         tabWidget = QtGui.QTabWidget(self)
+        self.bot_layout.addWidget(tabWidget)
+
+        # Concole
         self.console_output = QtGui.QTextEdit(self)
         self.console_output.setReadOnly(True)
         self.console_output.setLineWrapMode(QtGui.QTextEdit.NoWrap)
@@ -344,7 +352,24 @@ class MainWindow(QtGui.QWidget):
         font.setPointSize(10)
 
         tabWidget.addTab(self.console_output, "Console Output")
-        self.bot_layout.addWidget(tabWidget)
+
+        # STDIN
+        self.input = QtGui.QLineEdit()
+        self.input.returnPressed.connect(self.add_input)
+        self.input.setPlaceholderText('input here')
+        tabWidget.addTab(self.input, "Standard Input")
+
+        # STDOUT
+        self.output = QtGui.QTextEdit(self)
+        self.output.setReadOnly(True)
+        self.output.setLineWrapMode(QtGui.QTextEdit.NoWrap)
+
+        font = self.output.font()
+        font.setFamily("Courier")
+        font.setPointSize(10)
+
+        tabWidget.addTab(self.output, "Standard Output")
+
 
         # sections table
         self.sections_table_window = QtGui.QTabWidget(self)
@@ -403,6 +428,14 @@ class MainWindow(QtGui.QWidget):
         hh.setResizeMode(2, QtGui.QHeaderView.ResizeToContents)
         hh.setResizeMode(3, QtGui.QHeaderView.ResizeToContents)
         hh.setResizeMode(4, QtGui.QHeaderView.Stretch)
+
+    def add_input(self):
+        data = self.input.text()
+
+        thread = threading.Thread(target = self.worker.debugger.put_stdin, args = (str(data), ))
+        thread.start()
+
+        self.input.clear()
 
     def on_elf_set(self, status):
         self.startAction.setEnabled(status)
@@ -508,6 +541,18 @@ class MainWindow(QtGui.QWidget):
         co_text = self.console_output.toPlainText()
         self.console_output.setText(co_text + '\n' + text)
         self.console_output.moveCursor(QtGui.QTextCursor.End)
+
+    def write_stdout(self, text):
+        """
+        Appends text to the stdout window.
+        """
+
+        if text == '' or text is None:
+            return
+
+        co_text = self.output.toPlainText()
+        self.output.setText(co_text + text)
+        self.output.moveCursor(QtGui.QTextCursor.End)
 
     def highlight(self, qtextwidget, line):
         """

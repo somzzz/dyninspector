@@ -424,6 +424,23 @@ class DynLldb(object):
     def on_return_from_plt(self):
         self.logger.info("Return from PLT")
 
+    def put_stdin(self, data):
+        """
+        Write to STDIN
+        """
+        if self.process is None:
+            return
+
+        data = data + '\n'
+        self.process.PutSTDIN(data.encode('utf-8'))
+
+    def get_stdout(self):
+        """
+        Read STDOUT
+        """
+        out = self.process.GetSTDOUT(1024)
+        return out
+
     def read_plt(self):
         """
         After the process is started, read the plt data. Fill internal class
